@@ -1,8 +1,15 @@
 import aiohttp
 import datetime
-from useragent_changer import UserAgent
+import random
 
-ua =UserAgent('iphone')
+class UserAgent:
+    def __init__(self, device=None):
+        pass
+
+    def set(self):
+        return "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)"
+
+ua = UserAgent()
 
 PROXY_URL = ""
 

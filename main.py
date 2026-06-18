@@ -4,8 +4,12 @@ from discord import app_commands
 import os
 import traceback
 from dotenv import load_dotenv
-from datetime import datetime, timezone
+from dotenv import load_dotenv
+import os
+
 load_dotenv()
+
+from datetime import datetime, timezone
 
 # ★envファイルからBOTのトークンを読み込む
 token = os.getenv('TOKEN')

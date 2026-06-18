@@ -15,10 +15,10 @@ from datetime import datetime, timezone
 token = os.getenv('TOKEN')
 
 # BOTのステータスを設定
-STATUS = "Createby:@keru_developer_"
+STATUS = "ロキシー🙌万歳🙌バンザイ!🙌"
 
 # BOTフロッターを設定(とりあえず自分の名前)
-FOOTER_TEXT = "Createby:@keru_developer_"
+FOOTER_TEXT = "ぺにー「べりー」"
 
 
 

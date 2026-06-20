@@ -35,12 +35,15 @@ class AchievementModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
 
+        # 🧠 countと同じ思想：まず応答確定
+        await interaction.response.defer(ephemeral=True)
+
         try:
             rating = int(self.rating_input.value)
             if rating < 1 or rating > 5:
                 raise ValueError
         except:
-            return await interaction.response.send_message(
+            return await interaction.followup.send(
                 "❌ 評価は1〜5で入力してください",
                 ephemeral=True
             )
@@ -57,7 +60,7 @@ class AchievementModal(discord.ui.Modal):
 
         await self.log_channel.send(embed=embed)
 
-        await interaction.response.send_message(
+        await interaction.followup.send(
             "✅ 実績を送信しました",
             ephemeral=True
         )
@@ -68,16 +71,27 @@ class AchievementView(discord.ui.View):
         super().__init__(timeout=None)
         self.log_channel = log_channel
 
-    @discord.ui.button(label="実績を記入", style=discord.ButtonStyle.green, custom_id="achievement_btn")
+    @discord.ui.button(
+        label="実績を記入",
+        style=discord.ButtonStyle.green,
+        custom_id="achievement_btn"
+    )
     async def open_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(AchievementModal(self.log_channel))
+
+        # 🧠 count思想：まず応答確定系に寄せる
+        await interaction.response.send_modal(
+            AchievementModal(self.log_channel)
+        )
 
 
 class Achievement(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="実績記入パネル設置", description="実績パネルを設置します")
+    @app_commands.command(
+        name="実績記入パネル設置",
+        description="実績パネルを設置します"
+    )
     @app_commands.default_permissions(administrator=True)
     async def panel(
         self,
@@ -98,6 +112,7 @@ class Achievement(commands.Cog):
 
         await panel_channel.send(embed=embed, view=view)
 
+        # 🧠 countと同じパターンに統一
         await interaction.response.send_message(
             "✅ 実績パネルを設置しました",
             ephemeral=True

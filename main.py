@@ -64,4 +64,4 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
     print(error)
     traceback.print_exc()
 
-bot.run(token
+bot.run(token)

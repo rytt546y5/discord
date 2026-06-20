@@ -14,8 +14,8 @@ class VerifyModal(discord.ui.Modal):
         self.answer = answer
 
         self.user_answer = discord.ui.TextInput(
-            label="問題の答えを入力してください",
-            placeholder="数字を入力",
+            label="答えを入力",
+            placeholder="数字",
             required=True,
             max_length=3
         )
@@ -24,99 +24,79 @@ class VerifyModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
 
+        await interaction.response.defer(ephemeral=True)
+
         member = interaction.guild.get_member(interaction.user.id)
 
         try:
             user_input = int(self.user_answer.value)
-        except ValueError:
-            return await interaction.response.send_message(
-                "❌ 数字を入力してください。",
-                ephemeral=True
-            )
+        except:
+            return await interaction.followup.send("❌ 数字を入力してください", ephemeral=True)
 
-        # 既に付与済みチェック
         if self.role in member.roles:
-            return await interaction.response.send_message(
-                "✅ 既に認証済みです。",
-                ephemeral=True
-            )
+            return await interaction.followup.send("✅ 既に認証済みです", ephemeral=True)
 
-        # 正解
         if user_input == self.answer:
 
             try:
                 await member.add_roles(self.role, reason="認証成功")
             except discord.Forbidden:
-                return await interaction.response.send_message(
-                    "❌ Botにロール付与権限がありません。",
-                    ephemeral=True
-                )
+                return await interaction.followup.send("❌ 権限不足", ephemeral=True)
 
             failed_attempts[member.id] = 0
 
-            return await interaction.response.send_message(
-                f"✅ 認証成功！\n{self.role.mention} を付与しました！",
+            return await interaction.followup.send(
+                f"✅ 認証成功！ {self.role.mention}付与",
                 ephemeral=True
             )
 
-        # 不正解
         failed_attempts[member.id] = failed_attempts.get(member.id, 0) + 1
         remain = 3 - failed_attempts[member.id]
 
         if failed_attempts[member.id] >= 3:
 
             try:
-                await member.timeout(
-                    timedelta(minutes=10),
-                    reason="認証失敗3回"
-                )
-            except discord.Forbidden:
+                await member.timeout(timedelta(minutes=10), reason="認証失敗")
+            except:
                 pass
 
             failed_attempts[member.id] = 0
 
-            return await interaction.response.send_message(
-                "🚫 3回失敗したため10分タイムアウトしました。",
+            return await interaction.followup.send(
+                "🚫 3回失敗で10分タイムアウト",
                 ephemeral=True
             )
 
-        return await interaction.response.send_message(
-            f"❌ 不正解です。残り {remain} 回",
+        await interaction.followup.send(
+            f"❌ 不正解 残り{remain}",
             ephemeral=True
         )
 
 
-class VerifyButton(discord.ui.View):
+class VerifyView(discord.ui.View):
     def __init__(self, role: discord.Role):
         super().__init__(timeout=None)
         self.role = role
 
-    @discord.ui.button(
-        label="認証する",
-        emoji="✅",
-        style=discord.ButtonStyle.green
-    )
+    @discord.ui.button(label="認証する", style=discord.ButtonStyle.green, custom_id="verify_btn")
     async def verify(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         member = interaction.guild.get_member(interaction.user.id)
 
         if self.role in member.roles:
-            return await interaction.response.send_message(
-                "✅ 既に認証済みです。",
-                ephemeral=True
-            )
+            return await interaction.response.send_message("既に認証済み", ephemeral=True)
 
-        num1 = random.randint(1, 9)
-        num2 = random.randint(1, 9)
+        n1 = random.randint(1, 9)
+        n2 = random.randint(1, 9)
 
         if random.choice([True, False]):
-            question = f"{num1} + {num2}"
-            answer = num1 + num2
+            question = f"{n1} + {n2}"
+            answer = n1 + n2
         else:
-            if num2 > num1:
-                num1, num2 = num2, num1
-            question = f"{num1} - {num2}"
-            answer = num1 - num2
+            if n2 > n1:
+                n1, n2 = n2, n1
+            question = f"{n1} - {n2}"
+            answer = n1 - n2
 
         modal = VerifyModal(self.role, answer)
         modal.title = f"認証問題: {question}"
@@ -128,18 +108,8 @@ class VerifyCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(
-        name="verify",
-        description="認証パネルを作成します"
-    )
-    @app_commands.default_permissions(administrator=True)
-    async def verify(
-        self,
-        interaction: discord.Interaction,
-        title: str,
-        description: str,
-        role: discord.Role
-    ):
+    @app_commands.command(name="verify", description="認証パネル設置")
+    async def verify_panel(self, interaction: discord.Interaction, title: str, description: str, role: discord.Role):
 
         embed = discord.Embed(
             title=title,
@@ -147,14 +117,11 @@ class VerifyCog(commands.Cog):
             color=discord.Color.green()
         )
 
-        view = VerifyButton(role)
+        view = VerifyView(role)
 
         await interaction.channel.send(embed=embed, view=view)
 
-        await interaction.response.send_message(
-            "✅ 認証パネルを作成しました。",
-            ephemeral=True
-        )
+        await interaction.response.send_message("✅ 設置完了", ephemeral=True)
 
 
 async def setup(bot):

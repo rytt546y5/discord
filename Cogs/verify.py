@@ -18,26 +18,33 @@ class VerifyView(discord.ui.View):
     )
     async def verify(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        # ❌ 既にロール持ってる場合
-        if self.role in interaction.user.roles:
-            return await interaction.response.send_message(
-                "すでに認証済みです",
-                ephemeral=True
-            )
+        # guild safety
+        if interaction.guild is None:
+            return await interaction.response.send_message("サーバー内でのみ使用できます", ephemeral=True)
 
-        # ✔ ロール付与
+        # role safety
+        if self.role is None:
+            return await interaction.response.send_message("❌ ロールが見つかりません", ephemeral=True)
+
+        # already verified
+        if self.role in interaction.user.roles:
+            return await interaction.response.send_message("すでに認証済みです", ephemeral=True)
+
+        # add role
         try:
             await interaction.user.add_roles(self.role)
         except discord.Forbidden:
             return await interaction.response.send_message(
-                "❌ 権限がありません（ロール付与できない）",
+                "❌ botにロール付与権限がありません",
+                ephemeral=True
+            )
+        except discord.HTTPException:
+            return await interaction.response.send_message(
+                "❌ Discord APIエラー",
                 ephemeral=True
             )
 
-        await interaction.response.send_message(
-            "✅ 認証完了しました",
-            ephemeral=True
-        )
+        await interaction.response.send_message("✅ 認証完了しました", ephemeral=True)
 
 
 # =====================
@@ -48,14 +55,14 @@ class Verify(commands.Cog):
         self.bot = bot
 
     # =====================
-    # パネル設置コマンド
+    # PANEL
     # =====================
     @app_commands.command(
         name="verify_panel",
         description="認証パネルを設置します"
     )
     @app_commands.default_permissions(administrator=True)
-    async def panel(
+    async def verify_panel(
         self,
         interaction: discord.Interaction,
         title: str,
@@ -76,17 +83,9 @@ class Verify(commands.Cog):
         )
 
         await interaction.response.send_message(
-            "認証パネル設置完了",
+            "✅ 認証パネル設置完了",
             ephemeral=True
         )
-
-    # =====================
-    # 再起動対策（重要）
-    # =====================
-    @commands.Cog.listener()
-    async def on_ready(self):
-        # custom_idベースなので復元OK
-        self.bot.add_view(VerifyView(role=discord.Object(id=0)))
 
 
 # =====================

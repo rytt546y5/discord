@@ -11,6 +11,11 @@ TOKEN = os.getenv("TOKEN")
 STATUS = "Developer_very_"
 FOOTER_TEXT = "Developer_べりー"
 
+# =====================
+# GUILD ID（ここ重要）
+# =====================
+GUILD_ID = 1517761896390983750  # ←ここにサーバーID入れる
+
 
 # =====================
 # BOT CLASS
@@ -30,9 +35,11 @@ class MyBot(commands.Bot):
                     print(f"Failed: {filename}")
                     print(e)
 
-        # 💥 syncはここで1回だけ
-        await self.tree.sync()
-        print("SYNC DONE")
+        # 💥 guild sync（即時反映）
+        guild = discord.Object(id=GUILD_ID)
+        await self.tree.sync(guild=guild)
+
+        print("SYNC DONE (GUILD MODE)")
 
 
 # =====================
@@ -43,15 +50,15 @@ bot = MyBot(command_prefix="$", intents=intents, help_command=None)
 
 
 # =====================
-# READY
+# READY EVENT
 # =====================
 @bot.event
 async def on_ready():
-    print("起動成功")
+    print("起動成功👍")
 
     await bot.change_presence(
         activity=discord.Game(name=STATUS),
-        status=discord.Status.idle
+        status=discord.Status.online
     )
 
     print("COGS:", list(bot.cogs.keys()))
@@ -59,7 +66,7 @@ async def on_ready():
 
 
 # =====================
-# ERROR
+# ERROR HANDLER
 # =====================
 @bot.tree.error
 async def on_app_command_error(interaction, error):

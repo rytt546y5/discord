@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 token = os.getenv('TOKEN')
 
 # BOTのステータスを設定
-STATUS = "ロキシー🙌万歳🙌バンザイ!🙌"
+STATUS = "Developer_very_"
 
 # BOTフロッターを設定(とりあえず自分の名前)
 FOOTER_TEXT = "ぺにー「べりー」"
@@ -52,9 +52,10 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
     print(error)
     traceback.print_exc()
 
-@bot.event
+@@bot.event
 async def on_ready():
-    await bot.tree.sync()
-    print("SYNC DONE")
-
+    if not hasattr(bot, "synced"):
+        await bot.tree.sync()
+        bot.synced = True
+        print("SYNC DONE")
 bot.run(token)

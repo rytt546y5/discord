@@ -15,7 +15,7 @@ class VerifyModal(discord.ui.Modal):
 
         self.user_answer = discord.ui.TextInput(
             label="答えを入力",
-            placeholder="数字",
+            placeholder="数字を入力",
             required=True,
             max_length=3
         )
@@ -24,6 +24,7 @@ class VerifyModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
 
+        # 🧠 giveaway基準：まず応答確定
         await interaction.response.defer(ephemeral=True)
 
         member = interaction.guild.get_member(interaction.user.id)
@@ -31,44 +32,59 @@ class VerifyModal(discord.ui.Modal):
         try:
             user_input = int(self.user_answer.value)
         except:
-            return await interaction.followup.send("❌ 数字を入力してください", ephemeral=True)
+            return await interaction.followup.send(
+                "❌ 数字を入力してください",
+                ephemeral=True
+            )
 
+        # 既にロール持ってる
         if self.role in member.roles:
-            return await interaction.followup.send("✅ 既に認証済みです", ephemeral=True)
+            return await interaction.followup.send(
+                "✅ 既に認証済みです",
+                ephemeral=True
+            )
 
+        # 正解処理
         if user_input == self.answer:
 
             try:
                 await member.add_roles(self.role, reason="認証成功")
             except discord.Forbidden:
-                return await interaction.followup.send("❌ 権限不足", ephemeral=True)
+                return await interaction.followup.send(
+                    "❌ Botにロール付与権限がありません",
+                    ephemeral=True
+                )
 
             failed_attempts[member.id] = 0
 
             return await interaction.followup.send(
-                f"✅ 認証成功！ {self.role.mention}付与",
+                f"✅ 認証成功！ {self.role.mention} を付与しました",
                 ephemeral=True
             )
 
+        # 不正解処理
         failed_attempts[member.id] = failed_attempts.get(member.id, 0) + 1
         remain = 3 - failed_attempts[member.id]
 
         if failed_attempts[member.id] >= 3:
 
             try:
-                await member.timeout(timedelta(minutes=10), reason="認証失敗")
+                await member.timeout(
+                    timedelta(minutes=10),
+                    reason="認証失敗"
+                )
             except:
                 pass
 
             failed_attempts[member.id] = 0
 
             return await interaction.followup.send(
-                "🚫 3回失敗で10分タイムアウト",
+                "🚫 3回失敗したため10分タイムアウト",
                 ephemeral=True
             )
 
         await interaction.followup.send(
-            f"❌ 不正解 残り{remain}",
+            f"❌ 不正解 残り {remain}",
             ephemeral=True
         )
 
@@ -78,14 +94,23 @@ class VerifyView(discord.ui.View):
         super().__init__(timeout=None)
         self.role = role
 
-    @discord.ui.button(label="認証する", style=discord.ButtonStyle.green, custom_id="verify_btn")
+    @discord.ui.button(
+        label="認証する",
+        style=discord.ButtonStyle.green,
+        custom_id="verify_btn"
+    )
     async def verify(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         member = interaction.guild.get_member(interaction.user.id)
 
+        # 既に認証済み
         if self.role in member.roles:
-            return await interaction.response.send_message("既に認証済み", ephemeral=True)
+            return await interaction.response.send_message(
+                "既に認証済みです",
+                ephemeral=True
+            )
 
+        # 問題生成
         n1 = random.randint(1, 9)
         n2 = random.randint(1, 9)
 
@@ -101,6 +126,7 @@ class VerifyView(discord.ui.View):
         modal = VerifyModal(self.role, answer)
         modal.title = f"認証問題: {question}"
 
+        # 🧠 giveawayと同じ：即response
         await interaction.response.send_modal(modal)
 
 
@@ -108,8 +134,17 @@ class VerifyCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="verify", description="認証パネル設置")
-    async def verify_panel(self, interaction: discord.Interaction, title: str, description: str, role: discord.Role):
+    @app_commands.command(
+        name="verify",
+        description="認証パネルを作成します"
+    )
+    async def verify_panel(
+        self,
+        interaction: discord.Interaction,
+        title: str,
+        description: str,
+        role: discord.Role
+    ):
 
         embed = discord.Embed(
             title=title,
@@ -121,7 +156,11 @@ class VerifyCog(commands.Cog):
 
         await interaction.channel.send(embed=embed, view=view)
 
-        await interaction.response.send_message("✅ 設置完了", ephemeral=True)
+        # 🧠 giveaway基準
+        await interaction.response.send_message(
+            "✅ 認証パネル作成完了",
+            ephemeral=True
+        )
 
 
 async def setup(bot):

@@ -40,12 +40,17 @@ bot.setup_hook = load_cogs
 
 @bot.event
 async def on_ready():
-    print("READY")
+    print("起動に成功しました👍🏻.")
 
-    await bot.tree.sync()
+    await bot.change_presence(
+        activity=discord.Game(name=STATUS),
+        status=discord.Status.idle
+    )
 
-    cmds = bot.tree.get_commands()
-    print([c.name for c in cmds])
+    if not hasattr(bot, "synced"):
+        await bot.tree.sync()
+        bot.synced = True
+        print("GLOBAL SYNC DONE")
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):

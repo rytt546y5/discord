@@ -4,7 +4,6 @@ from discord import app_commands
 import os
 import traceback
 from dotenv import load_dotenv
-from dotenv import load_dotenv
 import os
 
 load_dotenv()

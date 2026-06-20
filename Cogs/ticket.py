@@ -2,27 +2,53 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
+
+# ─────────────
+# チケット削除ボタン（永続OK）
+# ─────────────
 class CloseTicketView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="🔒 チケットを閉じる", style=discord.ButtonStyle.red, custom_id="close_ticket")
-    async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("🗑️ チケットを閉じます...", ephemeral=True)
+    @discord.ui.button(
+        label="🔒 チケットを閉じる",
+        style=discord.ButtonStyle.red,
+        custom_id="close_ticket"
+    )
+    async def close_ticket(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+        await interaction.response.send_message(
+            "🗑️ チケットを閉じています...",
+            ephemeral=True
+        )
         await interaction.channel.delete()
 
 
+# ─────────────
+# チケット作成ボタン（パネル用）
+# ─────────────
 class TicketView(discord.ui.View):
     def __init__(self, staff_role_id: int):
         super().__init__(timeout=None)
         self.staff_role_id = staff_role_id
 
-    @discord.ui.button(label="🎫 チケット発行", style=discord.ButtonStyle.green, custom_id="create_ticket")
-    async def create_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-
+    @discord.ui.button(
+        label="🎫 チケット発行",
+        style=discord.ButtonStyle.green,
+        custom_id="create_ticket"
+    )
+    async def create_ticket(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
         guild = interaction.guild
         member = interaction.user
 
+        # 既存チェック
         existing = discord.utils.get(
             guild.channels,
             name=f"ticket-{member.id}"
@@ -30,7 +56,7 @@ class TicketView(discord.ui.View):
 
         if existing:
             return await interaction.response.send_message(
-                "❌ 既にチケットを作成しています。",
+                "❌ 既にチケットがあります",
                 ephemeral=True
             )
 
@@ -65,10 +91,7 @@ class TicketView(discord.ui.View):
 
         embed = discord.Embed(
             title="🎫 チケット作成",
-            description=(
-                f"{member.mention} さんのチケットです。\n\n"
-                "内容をご記入ください。"
-            ),
+            description=f"{member.mention} さんのチケットです",
             color=discord.Color.green()
         )
 
@@ -79,18 +102,21 @@ class TicketView(discord.ui.View):
         )
 
         await interaction.response.send_message(
-            f"✅ {channel.mention} を作成しました。",
+            f"✅ {channel.mention} を作成しました",
             ephemeral=True
         )
 
 
+# ─────────────
+# Cog本体
+# ─────────────
 class TicketCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     @app_commands.command(
         name="ticket",
-        description="チケットパネルを作成します"
+        description="チケットパネルを設置します"
     )
     @app_commands.default_permissions(administrator=True)
     async def ticket(
@@ -100,7 +126,6 @@ class TicketCog(commands.Cog):
         description: str,
         staff_role: discord.Role
     ):
-
         embed = discord.Embed(
             title=title,
             description=description,
@@ -109,19 +134,19 @@ class TicketCog(commands.Cog):
 
         view = TicketView(staff_role.id)
 
-        await interaction.channel.send(
-            embed=embed,
-            view=view
-        )
+        await interaction.channel.send(embed=embed, view=view)
 
         await interaction.response.send_message(
-            "✅ チケットパネルを作成しました。",
+            "✅ チケットパネル設置完了",
             ephemeral=True
         )
 
+    # ─────────────
+    # 起動時（重要）
+    # ─────────────
     @commands.Cog.listener()
     async def on_ready(self):
-        self.bot.add_view(TicketView(0))
+        # ★重要：Closeだけ復元（TicketViewは復元しない）
         self.bot.add_view(CloseTicketView())
 
 

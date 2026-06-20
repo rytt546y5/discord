@@ -54,8 +54,6 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
 
 @bot.event
 async def on_ready():
-    if not hasattr(bot, "synced"):
-        await bot.tree.sync()
-        print("GLOBAL SYNC DONE")
-        bot.synced = True
+    await bot.tree.sync()
+    print("SYNC DONE")
 bot.run(token)

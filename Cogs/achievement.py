@@ -1,16 +1,38 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
+import json
+import os
+
+
+# =========================
+# 📦 永続化ファイル
+# =========================
+DATA_FILE = "achievement_config.json"
+
+
+def load_data():
+    if not os.path.exists(DATA_FILE):
+        return {}
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_data(data):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
 
 
 def stars(n: int):
     return "⭐" * n + "☆" * (5 - n)
 
 
+# =========================
+# 📌 Modal
+# =========================
 class AchievementModal(discord.ui.Modal):
-    def __init__(self, log_channel: discord.TextChannel):
+    def __init__(self):
         super().__init__(title="実績記入")
-        self.log_channel = log_channel
 
         self.title_input = discord.ui.TextInput(
             label="タイトル",
@@ -35,9 +57,31 @@ class AchievementModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
 
-        # 🧠 countと同じ思想：まず応答確定
         await interaction.response.defer(ephemeral=True)
 
+        # =========================
+        # 📌 チャンネル取得
+        # =========================
+        data = load_data()
+        guild_id = str(interaction.guild.id)
+
+        if guild_id not in data:
+            return await interaction.followup.send(
+                "❌ ログチャンネルが設定されていません",
+                ephemeral=True
+            )
+
+        log_channel = interaction.guild.get_channel(data[guild_id])
+
+        if log_channel is None:
+            return await interaction.followup.send(
+                "❌ ログチャンネルが見つかりません",
+                ephemeral=True
+            )
+
+        # =========================
+        # 📌 rating処理
+        # =========================
         try:
             rating = int(self.rating_input.value)
             if rating < 1 or rating > 5:
@@ -48,6 +92,9 @@ class AchievementModal(discord.ui.Modal):
                 ephemeral=True
             )
 
+        # =========================
+        # 📌 embed作成
+        # =========================
         embed = discord.Embed(
             title="📊 実績報告",
             color=discord.Color.green()
@@ -58,7 +105,10 @@ class AchievementModal(discord.ui.Modal):
         embed.add_field(name="内容", value=self.content_input.value, inline=False)
         embed.add_field(name="評価", value=stars(rating), inline=False)
 
-        await self.log_channel.send(embed=embed)
+        # =========================
+        # 📌 ログ送信
+        # =========================
+        await log_channel.send(embed=embed)
 
         await interaction.followup.send(
             "✅ 実績を送信しました",
@@ -66,10 +116,12 @@ class AchievementModal(discord.ui.Modal):
         )
 
 
+# =========================
+# 📌 View（ボタン）
+# =========================
 class AchievementView(discord.ui.View):
-    def __init__(self, log_channel: discord.TextChannel):
+    def __init__(self):
         super().__init__(timeout=None)
-        self.log_channel = log_channel
 
     @discord.ui.button(
         label="実績を記入",
@@ -78,16 +130,19 @@ class AchievementView(discord.ui.View):
     )
     async def open_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        # 🧠 count思想：まず応答確定系に寄せる
-        await interaction.response.send_modal(
-            AchievementModal(self.log_channel)
-        )
+        await interaction.response.send_modal(AchievementModal())
 
 
+# =========================
+# 📌 Cog本体
+# =========================
 class Achievement(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    # =========================
+    # 📌 パネル設置
+    # =========================
     @app_commands.command(
         name="実績記入パネル設置",
         description="実績パネルを設置します"
@@ -98,8 +153,7 @@ class Achievement(commands.Cog):
         interaction: discord.Interaction,
         title: str,
         description: str,
-        panel_channel: discord.TextChannel,
-        log_channel: discord.TextChannel
+        panel_channel: discord.TextChannel
     ):
 
         embed = discord.Embed(
@@ -108,16 +162,39 @@ class Achievement(commands.Cog):
             color=discord.Color.blurple()
         )
 
-        view = AchievementView(log_channel)
+        await panel_channel.send(embed=embed, view=AchievementView())
 
-        await panel_channel.send(embed=embed, view=view)
-
-        # 🧠 countと同じパターンに統一
         await interaction.response.send_message(
             "✅ 実績パネルを設置しました",
             ephemeral=True
         )
 
+    # =========================
+    # 📌 ログ設定
+    # =========================
+    @app_commands.command(
+        name="実績ログ設定",
+        description="実績の送信先チャンネルを設定します"
+    )
+    @app_commands.default_permissions(administrator=True)
+    async def set_log(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel
+    ):
 
+        data = load_data()
+        data[str(interaction.guild.id)] = channel.id
+        save_data(data)
+
+        await interaction.response.send_message(
+            f"✅ 実績ログを {channel.mention} に設定しました",
+            ephemeral=True
+        )
+
+
+# =========================
+# 📌 setup
+# =========================
 async def setup(bot):
     await bot.add_cog(Achievement(bot))

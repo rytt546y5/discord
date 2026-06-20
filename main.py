@@ -70,8 +70,17 @@ async def on_ready():
 # =====================
 @bot.tree.error
 async def on_app_command_error(interaction, error):
-    print("ERROR:", error)
+    print("❌ ERROR:", error)
+    import traceback
     traceback.print_exc()
+
+    try:
+        await interaction.response.send_message(
+            "エラーが発生しました",
+            ephemeral=True
+        )
+    except:
+        pass
 
 
 # =====================

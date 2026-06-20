@@ -6,16 +6,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# =====================
-# ENV
-# =====================
 TOKEN = os.getenv("TOKEN")
 
 STATUS = "Developer_very_"
 FOOTER_TEXT = "Developer_べりー"
 
+
 # =====================
-# BOT CLASS（重要）
+# BOT CLASS
 # =====================
 class MyBot(commands.Bot):
     async def setup_hook(self):
@@ -32,8 +30,10 @@ class MyBot(commands.Bot):
                     print(f"Failed: {filename}")
                     print(e)
 
+        # 💥 syncはここで1回だけ
         await self.tree.sync()
         print("SYNC DONE")
+
 
 # =====================
 # BOT INIT
@@ -41,12 +41,13 @@ class MyBot(commands.Bot):
 intents = discord.Intents.all()
 bot = MyBot(command_prefix="$", intents=intents, help_command=None)
 
+
 # =====================
-# READY EVENT
+# READY
 # =====================
 @bot.event
 async def on_ready():
-    print("起動に成功しました👍🏻.")
+    print("起動成功")
 
     await bot.change_presence(
         activity=discord.Game(name=STATUS),
@@ -56,13 +57,15 @@ async def on_ready():
     print("COGS:", list(bot.cogs.keys()))
     print("COMMANDS:", [c.name for c in bot.tree.get_commands()])
 
+
 # =====================
-# ERROR HANDLER
+# ERROR
 # =====================
 @bot.tree.error
 async def on_app_command_error(interaction, error):
     print("ERROR:", error)
     traceback.print_exc()
+
 
 # =====================
 # RUN

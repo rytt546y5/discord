@@ -51,7 +51,10 @@ async def on_ready():
         await bot.tree.sync()
         bot.synced = True
         print("SYNC DONE")
-        print([c.name for c in bot.tree.get_commands()])
+
+    # 👇ここに入れる
+    print("loaded cogs:", bot.cogs)
+    print("commands:", bot.tree.get_commands())
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):

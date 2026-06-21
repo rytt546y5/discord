@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
+from typing import Optional
 
 
 class Avatar(commands.Cog):
@@ -17,7 +18,7 @@ class Avatar(commands.Cog):
     async def avatar(
         self,
         interaction: discord.Interaction,
-        user: discord.User = None
+        user: Optional[discord.User] = None
     ):
 
         user = user or interaction.user

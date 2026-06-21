@@ -3,22 +3,103 @@ from discord.ext import commands
 from discord import app_commands
 
 
+# =====================
+# VIEW（チケット作成）
+# =====================
+class TicketView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="🎟 チケット作成",
+        style=discord.ButtonStyle.green,
+        custom_id="ticket_create"
+    )
+    async def create(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        guild = interaction.guild
+        user = interaction.user
+
+        # 重複防止
+        existing = discord.utils.get(guild.channels, name=f"ticket-{user.id}")
+        if existing:
+            return await interaction.response.send_message(
+                f"❌ 既にチケットがあります: {existing.mention}",
+                ephemeral=True
+            )
+
+        channel = await guild.create_text_channel(
+            name=f"ticket-{user.id}"
+        )
+
+        # 権限
+        await channel.set_permissions(guild.default_role, view_channel=False)
+        await channel.set_permissions(user, view_channel=True, send_messages=True)
+
+        embed = discord.Embed(
+            title="🎟 Ticket作成完了",
+            description="サポートが来るまでお待ちください",
+            color=discord.Color.green()
+        )
+
+        await channel.send(embed=embed, view=TicketCloseView())
+
+        await interaction.response.send_message(
+            f"✅ チケット作成: {channel.mention}",
+            ephemeral=True
+        )
+
+
+# =====================
+# VIEW（クローズ）
+# =====================
+class TicketCloseView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="🔒 チケットを閉じる",
+        style=discord.ButtonStyle.red,
+        custom_id="ticket_close"
+    )
+    async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        user = interaction.user
+
+        # 🔥 権限チェック（ここが重要）
+        if not (
+            user.guild_permissions.administrator or
+            user.guild_permissions.manage_channels
+        ):
+            return await interaction.response.send_message(
+                "❌ この操作は管理者のみ可能です",
+                ephemeral=True
+            )
+
+        await interaction.response.send_message("🔒 チケットを削除します...", ephemeral=True)
+
+        await interaction.channel.delete()
+
+
+# =====================
+# COG
+# =====================
 class TicketCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     # =====================
-    # TICKETパネル設置
+    # パネル設置
     # =====================
     @app_commands.command(
         name="ticket_panel",
         description="チケットパネルを設置します"
     )
     @app_commands.describe(
-        channel="設置するチャンネル",
-        title="パネルタイトル",
+        channel="設置チャンネル",
+        title="タイトル",
         description="説明文",
-        image="画像（任意・添付ファイル）"
+        image="画像（任意・スマホ対応）"
     )
     async def ticket_panel(
         self,
@@ -32,56 +113,25 @@ class TicketCog(commands.Cog):
         embed = discord.Embed(
             title=title,
             description=description,
-            color=discord.Color.green()
+            color=discord.Color.blurple()
+        )
+
+        embed.add_field(
+            name="🎫 Ticketの使い方",
+            value="ボタンを押すと専用チャンネルが作成されます",
+            inline=False
         )
 
         if image:
             embed.set_image(url=image.url)
 
-        embed.add_field(
-            name="🎟 Ticketについて",
-            value="ボタンを押すとサポートチケットが作成されます",
-            inline=False
+        await channel.send(
+            embed=embed,
+            view=TicketView()
         )
-
-        await channel.send(embed=embed, view=TicketView())
 
         await interaction.response.send_message(
             "✅ ticketパネル設置完了",
-            ephemeral=True
-        )
-
-
-# =====================
-# TICKET VIEW
-# =====================
-class TicketView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(
-        label="🎟 チケット作成",
-        style=discord.ButtonStyle.green,
-        custom_id="ticket_create"
-    )
-    async def create(
-        self,
-        interaction: discord.Interaction,
-        button: discord.ui.Button
-    ):
-
-        guild = interaction.guild
-
-        # チャンネル作成
-        channel = await guild.create_text_channel(
-            name=f"ticket-{interaction.user.name}"
-        )
-
-        await channel.set_permissions(guild.default_role, read_messages=False)
-        await channel.set_permissions(interaction.user, read_messages=True, send_messages=True)
-
-        await interaction.response.send_message(
-            f"✅ チケット作成: {channel.mention}",
             ephemeral=True
         )
 

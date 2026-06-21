@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
+from typing import Optional
 
 
 class DM(commands.Cog):
@@ -22,13 +23,20 @@ class DM(commands.Cog):
         message: str
     ):
 
+        # 🔥 管理者制限（重要）
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(
+                "❌ 管理者のみ使用できます",
+                ephemeral=True
+            )
+
         embed = discord.Embed(
             title="📩 Botからのメッセージ",
             description=message,
             color=discord.Color.green()
         )
 
-        embed.set_footer(text=f"From: {interaction.user}")
+        embed.set_footer(text=f"From: {interaction.user.name}")
 
         try:
             await user.send(embed=embed)
@@ -40,7 +48,7 @@ class DM(commands.Cog):
 
         except discord.Forbidden:
             await interaction.response.send_message(
-                "❌ DMを送信できません（DM拒否の可能性）",
+                "❌ DM送信できません（相手がDM拒否中）",
                 ephemeral=True
             )
 

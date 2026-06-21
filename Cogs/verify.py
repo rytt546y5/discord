@@ -4,27 +4,31 @@ from discord import app_commands
 
 
 # =====================
-# VIEW（認証ボタン）
+# VIEW（永続ボタン）
 # =====================
 class VerifyView(discord.ui.View):
-    def __init__(self):
+    def __init__(self, role_id: int):
         super().__init__(timeout=None)
+        self.role_id = role_id
 
     @discord.ui.button(
-        label="✅ 認証する",
+        label="認証する",
         style=discord.ButtonStyle.success,
         custom_id="verify_button"
     )
     async def verify(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        role = discord.utils.get(
-            interaction.guild.roles,
-            name="verified"
-        )
+        role = interaction.guild.get_role(self.role_id)
 
-        if not role:
+        if role is None:
             return await interaction.response.send_message(
-                "❌ verifiedロールがありません",
+                "❌ ロールが見つかりません",
+                ephemeral=True
+            )
+
+        if role in interaction.user.roles:
+            return await interaction.response.send_message(
+                "⚠️ すでに認証済みです",
                 ephemeral=True
             )
 
@@ -45,14 +49,15 @@ class Verify(commands.Cog):
 
     @app_commands.command(
         name="verify_panel",
-        description="認証パネルを設置"
+        description="認証パネル設置"
     )
     async def verify_panel(
         self,
         interaction: discord.Interaction,
         channel: discord.TextChannel,
-        title: str,
-        description: str,
+        role: discord.Role,
+        title: str = "認証パネル",
+        description: str = "ボタンを押して認証してください",
         image: discord.Attachment = None
     ):
 
@@ -64,7 +69,7 @@ class Verify(commands.Cog):
 
         embed.add_field(
             name="📌 認証",
-            value="ボタンを押すと認証されます",
+            value=f"このボタンで {role.mention} を付与します",
             inline=False
         )
 
@@ -73,7 +78,7 @@ class Verify(commands.Cog):
 
         await channel.send(
             embed=embed,
-            view=VerifyView()
+            view=VerifyView(role.id)
         )
 
         await interaction.response.send_message(

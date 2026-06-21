@@ -38,13 +38,13 @@ class AchievementModal(discord.ui.Modal):
 
         self.title_input = discord.ui.TextInput(
             label="タイトル",
-            placeholder="例：レベルアップ達成",
+            placeholder="例：購入したもの",
             max_length=50
         )
 
         self.content_input = discord.ui.TextInput(
             label="内容",
-            placeholder="例：レベル50に到達しました",
+            placeholder="例：感想",
             style=discord.TextStyle.paragraph,
             max_length=300
         )

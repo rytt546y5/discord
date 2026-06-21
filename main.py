@@ -9,8 +9,6 @@ load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
 STATUS = "Developer_very_"
-FOOTER_TEXT = "Developer_べりー"
-
 GUILD_ID = 1517761896390983750
 
 
@@ -19,8 +17,6 @@ GUILD_ID = 1517761896390983750
 # =====================
 class MyBot(commands.Bot):
     async def setup_hook(self):
-        self.embed_footer = FOOTER_TEXT
-
         print("Loading Cogs...")
 
         # =====================
@@ -33,18 +29,24 @@ class MyBot(commands.Bot):
                     print(f"Loaded: {filename}")
                 except Exception as e:
                     print(f"Failed: {filename}")
-                    print(e)
+                    traceback.print_exc()
 
         guild = discord.Object(id=GUILD_ID)
 
         # =====================
-        # 💥重要：完全同期リセット
+        # 💥完全安定SYNC構成
         # =====================
-        self.tree.clear_commands(guild=guild)  # ←これで古いコマンド消す
 
+        # guildコマンドリセット
+        self.tree.clear_commands(guild=guild)
+
+        # guild sync（即時反映）
         await self.tree.sync(guild=guild)
 
-        print("SYNC DONE (SAFE MODE)")
+        # global sync（キャッシュ安定化）
+        await self.tree.sync()
+
+        print("SYNC DONE (PRO MODE)")
 
 
 # =====================
@@ -61,17 +63,18 @@ bot = MyBot(command_prefix="$", intents=intents, help_command=None)
 async def on_ready():
     print("起動成功👍")
 
+    # 💥ステータス安定版
     await bot.change_presence(
-    activity=discord.Game(name=STATUS),
-    status=discord.Status.online
-)
+        activity=discord.Game(name=STATUS),
+        status=discord.Status.online
+    )
 
     print("COGS:", list(bot.cogs.keys()))
     print("COMMANDS:", [c.name for c in bot.tree.get_commands()])
 
 
 # =====================
-# GLOBAL ERROR HANDLER
+# ERROR HANDLER
 # =====================
 @bot.tree.error
 async def on_app_command_error(interaction, error):

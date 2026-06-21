@@ -1,12 +1,12 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import asyncio
-import random
 import json
 import os
+import random
 
-DATA_FILE = "giveaway_data.json"
+
+DATA_FILE = "giveaway.json"
 
 
 def load_data():
@@ -22,7 +22,7 @@ def save_data(data):
 
 
 # =====================
-# GIVEAWAY VIEW
+# VIEW
 # =====================
 class GiveawayView(discord.ui.View):
     def __init__(self):
@@ -34,8 +34,8 @@ class GiveawayView(discord.ui.View):
         custom_id="giveaway_join"
     )
     async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = load_data()
 
+        data = load_data()
         gid = str(interaction.message.id)
 
         if gid not in data:
@@ -43,7 +43,7 @@ class GiveawayView(discord.ui.View):
 
         if interaction.user.id in data[gid]:
             return await interaction.response.send_message(
-                "❌ すでに参加済み",
+                "⚠ すでに参加済みです",
                 ephemeral=True
             )
 
@@ -51,7 +51,7 @@ class GiveawayView(discord.ui.View):
         save_data(data)
 
         await interaction.response.send_message(
-            "✅ 参加しました",
+            "✅ 参加しました！",
             ephemeral=True
         )
 
@@ -64,56 +64,75 @@ class Giveaway(commands.Cog):
         self.bot = bot
 
     @app_commands.command(
-        name="giveaway",
-        description="抽選イベント作成"
+        name="giveaway_panel",
+        description="抽選イベントパネル設置"
     )
-    @app_commands.default_permissions(administrator=True)
-    async def giveaway(
+    @app_commands.describe(
+        channel="設置チャンネル",
+        title="タイトル",
+        description="説明",
+        image="画像（任意・添付）"
+    )
+    async def giveaway_panel(
         self,
         interaction: discord.Interaction,
         channel: discord.TextChannel,
-        prize: str,
-        winners: int,
-        duration: int
+        title: str,
+        description: str,
+        image: discord.Attachment = None
     ):
+
         embed = discord.Embed(
-            title="🎉 GIVEAWAY",
-            description=f"**景品:** {prize}\n**当選人数:** {winners}\n**時間:** {duration}秒",
+            title=title,
+            description=description,
             color=discord.Color.gold()
         )
 
-        msg = await channel.send(embed=embed, view=GiveawayView())
+        if image:
+            embed.set_image(url=image.url)
+
+        embed.add_field(
+            name="🎉 参加方法",
+            value="ボタンを押すだけで参加できます",
+            inline=False
+        )
+
+        msg = await channel.send(
+            embed=embed,
+            view=GiveawayView()
+        )
 
         await interaction.response.send_message(
-            "✅ Giveaway作成完了",
+            f"✅ giveaway設置完了: {msg.jump_url}",
             ephemeral=True
         )
 
-        await asyncio.sleep(duration)
+    # =====================
+    # 抽選コマンド
+    # =====================
+    @app_commands.command(
+        name="giveaway_pick",
+        description="当選者をランダム選出"
+    )
+    async def pick(self, interaction: discord.Interaction):
 
         data = load_data()
-        participants = data.get(str(msg.id), [])
+        gid = str(interaction.channel.last_message_id)
 
-        if not participants:
-            await channel.send("❌ 参加者なし")
-            return
+        users = data.get(gid, [])
 
-        winners_list = random.sample(
-            participants,
-            k=min(winners, len(participants))
-        )
+        if not users:
+            return await interaction.response.send_message(
+                "❌ 参加者なし",
+                ephemeral=True
+            )
 
-        mentions = []
-        for user_id in winners_list:
-            mentions.append(f"<@{user_id}>")
+        winner_id = random.choice(users)
 
-        await channel.send(
-            f"🏆 当選者: {' '.join(mentions)}"
+        await interaction.response.send_message(
+            f"🎉 当選者: <@{winner_id}>"
         )
 
 
-# =====================
-# SETUP
-# =====================
 async def setup(bot):
     await bot.add_cog(Giveaway(bot))

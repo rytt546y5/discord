@@ -1,197 +1,125 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-import json
-import os
+from datetime import datetime
 
-CONFIG_FILE = “ticket_config.json”
-
-def load_data():
-if not os.path.exists(CONFIG_FILE):
-return {}
-
-with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-    return json.load(f)
-
-def save_data(data):
-with open(CONFIG_FILE, “w”, encoding=“utf-8”) as f:
-json.dump(data, f, indent=4)
-
-class CloseTicketView(discord.ui.View):
-def init(self, staff_role_id: int):
+class StatusView(discord.ui.View):
+def init(self):
 super().init(timeout=None)
-self.staff_role_id = staff_role_id
 
-@discord.ui.button(
-    label="🔒 チケットを閉じる",
-    style=discord.ButtonStyle.red,
-    custom_id="close_ticket"
-)
-async def close_ticket(
+async def update_status(
     self,
     interaction: discord.Interaction,
-    button: discord.ui.Button
+    status_text: str,
+    color: discord.Color
 ):
-    staff_role = interaction.guild.get_role(
-        self.staff_role_id
-    )
-    if (
-        staff_role
-        and staff_role not in interaction.user.roles
-    ):
+    if not interaction.user.guild_permissions.administrator:
         return await interaction.response.send_message(
-            "❌ スタッフのみ閉じられます",
+            "❌ 管理者のみ使用できます",
             ephemeral=True
         )
-    await interaction.response.send_message(
-        "🗑️ チケットを削除します...",
-        ephemeral=True
-    )
-    await interaction.channel.delete()
-
-class TicketView(discord.ui.View):
-def init(self, staff_role_id: int):
-super().init(timeout=None)
-self.staff_role_id = staff_role_id
-
-@discord.ui.button(
-    label="🎫 チケット発行",
-    style=discord.ButtonStyle.green,
-    custom_id="create_ticket"
-)
-async def create_ticket(
-    self,
-    interaction: discord.Interaction,
-    button: discord.ui.Button
-):
-    guild = interaction.guild
-    member = interaction.user
-    existing = discord.utils.get(
-        guild.channels,
-        name=f"ticket-{member.id}"
-    )
-    if existing:
-        return await interaction.response.send_message(
-            "❌ 既にチケットがあります",
-            ephemeral=True
-        )
-    staff_role = guild.get_role(
-        self.staff_role_id
-    )
-    overwrites = {
-        guild.default_role:
-            discord.PermissionOverwrite(
-                view_channel=False
-            ),
-        member:
-            discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                read_message_history=True
-            ),
-        guild.me:
-            discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                manage_channels=True,
-                read_message_history=True
-            )
-    }
-    if staff_role:
-        overwrites[staff_role] = (
-            discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                read_message_history=True
-            )
-        )
-    channel = await guild.create_text_channel(
-        name=f"ticket-{member.id}",
-        overwrites=overwrites
-    )
+    now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
     embed = discord.Embed(
-        title="🎫 チケット作成",
-        description=f"{member.mention} さんのチケットです",
-        color=discord.Color.green()
+        title="対応ステータス",
+        description=status_text,
+        color=color
     )
-    await channel.send(
-        content=staff_role.mention if staff_role else None,
+    embed.add_field(
+        name="更新者",
+        value=interaction.user.mention,
+        inline=False
+    )
+    embed.add_field(
+        name="更新時刻",
+        value=now,
+        inline=False
+    )
+    await interaction.message.edit(
         embed=embed,
-        view=CloseTicketView(
-            self.staff_role_id
-        )
+        view=self
     )
     await interaction.response.send_message(
-        f"✅ {channel.mention} を作成しました",
+        "✅ 更新しました",
         ephemeral=True
     )
+@discord.ui.button(
+    label="🟢 対応中",
+    style=discord.ButtonStyle.green,
+    custom_id="status_green"
+)
+async def green(
+    self,
+    interaction: discord.Interaction,
+    button: discord.ui.Button
+):
+    await self.update_status(
+        interaction,
+        "🟢 対応中",
+        discord.Color.green()
+    )
+@discord.ui.button(
+    label="🟡 離席中",
+    style=discord.ButtonStyle.secondary,
+    custom_id="status_yellow"
+)
+async def yellow(
+    self,
+    interaction: discord.Interaction,
+    button: discord.ui.Button
+):
+    await self.update_status(
+        interaction,
+        "🟡 離席中",
+        discord.Color.gold()
+    )
+@discord.ui.button(
+    label="🔴 対応不可",
+    style=discord.ButtonStyle.red,
+    custom_id="status_red"
+)
+async def red(
+    self,
+    interaction: discord.Interaction,
+    button: discord.ui.Button
+):
+    await self.update_status(
+        interaction,
+        "🔴 対応不可",
+        discord.Color.red()
+    )
 
-class TicketCog(commands.Cog):
+class StatusCog(commands.Cog):
 def init(self, bot):
 self.bot = bot
 
 @app_commands.command(
-    name="ticket",
-    description="チケットパネルを設置します"
+    name="status_panel",
+    description="対応ステータスパネルを設置します"
 )
-@app_commands.default_permissions(
-    administrator=True
-)
-async def ticket(
+@app_commands.default_permissions(administrator=True)
+async def status_panel(
     self,
     interaction: discord.Interaction,
-    channel: discord.TextChannel,
     title: str,
     description: str,
-    staff_role: discord.Role,
-    image_url: str = None
+    channel: discord.TextChannel
 ):
     embed = discord.Embed(
         title=title,
         description=description,
         color=discord.Color.blurple()
     )
-    if image_url:
-        embed.set_image(
-            url=image_url
-        )
-    view = TicketView(
-        staff_role.id
-    )
     await channel.send(
         embed=embed,
-        view=view
+        view=StatusView()
     )
-    data = load_data()
-    data[str(interaction.guild.id)] = {
-        "staff_role_id": staff_role.id
-    }
-    save_data(data)
     await interaction.response.send_message(
-        "✅ チケットパネル設置完了",
+        "✅ ステータスパネルを設置しました",
         ephemeral=True
     )
 @commands.Cog.listener()
 async def on_ready(self):
-    data = load_data()
-    for guild_id, value in data.items():
-        try:
-            self.bot.add_view(
-                TicketView(
-                    value["staff_role_id"]
-                )
-            )
-            self.bot.add_view(
-                CloseTicketView(
-                    value["staff_role_id"]
-                )
-            )
-        except Exception as e:
-            print(
-                f"Ticket Restore Error: {e}"
-            )
+    self.bot.add_view(StatusView())
 
 async def setup(bot):
-await bot.add_cog(
-TicketCog(bot)
-)
+await bot.add_cog(StatusCog(bot))

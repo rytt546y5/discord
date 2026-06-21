@@ -13,20 +13,22 @@ class TicketView(discord.ui.View):
     @discord.ui.button(
         label="🎟 チケット作成",
         style=discord.ButtonStyle.green,
-        custom_id="ticket_create"
+        custom_id="ticket_create_v1"  # 💥バージョン固定（重要）
     )
     async def create(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        # 💥デバッグログ（これ超重要）
-        print("🔥 TICKET BUTTON CLICKED")
+        print("🔥 TICKET CLICK")
 
         guild = interaction.guild
         user = interaction.user
 
-        # 重複防止チェック
-        existing = discord.utils.get(guild.channels, name=f"ticket-{user.id}")
+        # 💥重複チェック（名前だけじゃなくID基準）
+        existing = discord.utils.get(
+            guild.channels,
+            name=f"ticket-{user.id}"
+        )
+
         if existing:
-            print("⚠ 既存チケットあり")
             return await interaction.response.send_message(
                 f"❌ 既にチケットがあります: {existing.mention}",
                 ephemeral=True
@@ -37,7 +39,7 @@ class TicketView(discord.ui.View):
             name=f"ticket-{user.id}"
         )
 
-        print(f"📁 チケット作成: {channel.name}")
+        print(f"📁 CREATED: {channel.name}")
 
         # 権限設定
         await channel.set_permissions(guild.default_role, view_channel=False)
@@ -67,30 +69,28 @@ class TicketCloseView(discord.ui.View):
     @discord.ui.button(
         label="🔒 チケットを閉じる",
         style=discord.ButtonStyle.red,
-        custom_id="ticket_close"
+        custom_id="ticket_close_v1"  # 💥バージョン固定
     )
     async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        print("🔒 CLOSE BUTTON CLICKED")
-
         user = interaction.user
 
+        # 管理者 or チャンネル所有者だけOK
         if not (
             user.guild_permissions.administrator or
             user.guild_permissions.manage_channels
         ):
-            print("❌ 権限なし")
             return await interaction.response.send_message(
-                "❌ この操作は管理者のみ可能です",
+                "❌ 管理者のみ可能です",
                 ephemeral=True
             )
 
         await interaction.response.send_message(
-            "🔒 チケットを削除します...",
+            "🔒 チケット削除中...",
             ephemeral=True
         )
 
-        print(f"🗑 削除: {interaction.channel.name}")
+        print(f"🗑 DELETE: {interaction.channel.name}")
 
         await interaction.channel.delete()
 
@@ -102,14 +102,17 @@ class TicketCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    # =====================
+    # パネル設置
+    # =====================
     @app_commands.command(
         name="ticket_panel",
-        description="チケットパネルを設置します"
+        description="チケットパネルを設置"
     )
     @app_commands.describe(
         channel="設置チャンネル",
         title="タイトル",
-        description="説明文",
+        description="説明",
         image="画像（任意）"
     )
     async def ticket_panel(
@@ -121,7 +124,7 @@ class TicketCog(commands.Cog):
         image: discord.Attachment = None
     ):
 
-        print("📌 ticket_panel EXECUTED")
+        print("📌 PANEL CREATED")
 
         embed = discord.Embed(
             title=title,
@@ -130,8 +133,8 @@ class TicketCog(commands.Cog):
         )
 
         embed.add_field(
-            name="🎫 Ticketの使い方",
-            value="ボタンを押すと専用チャンネルが作成されます",
+            name="🎫 使い方",
+            value="ボタンを押すとチケットが作成されます",
             inline=False
         )
 
@@ -144,7 +147,7 @@ class TicketCog(commands.Cog):
         )
 
         await interaction.response.send_message(
-            "✅ ticketパネル設置完了",
+            "✅ パネル設置完了",
             ephemeral=True
         )
 

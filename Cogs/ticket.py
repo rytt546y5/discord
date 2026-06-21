@@ -17,22 +17,29 @@ class TicketView(discord.ui.View):
     )
     async def create(self, interaction: discord.Interaction, button: discord.ui.Button):
 
+        # 💥デバッグログ（これ超重要）
+        print("🔥 TICKET BUTTON CLICKED")
+
         guild = interaction.guild
         user = interaction.user
 
-        # 重複防止
+        # 重複防止チェック
         existing = discord.utils.get(guild.channels, name=f"ticket-{user.id}")
         if existing:
+            print("⚠ 既存チケットあり")
             return await interaction.response.send_message(
                 f"❌ 既にチケットがあります: {existing.mention}",
                 ephemeral=True
             )
 
+        # チャンネル作成
         channel = await guild.create_text_channel(
             name=f"ticket-{user.id}"
         )
 
-        # 権限
+        print(f"📁 チケット作成: {channel.name}")
+
+        # 権限設定
         await channel.set_permissions(guild.default_role, view_channel=False)
         await channel.set_permissions(user, view_channel=True, send_messages=True)
 
@@ -64,19 +71,26 @@ class TicketCloseView(discord.ui.View):
     )
     async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
 
+        print("🔒 CLOSE BUTTON CLICKED")
+
         user = interaction.user
 
-        # 🔥 権限チェック（ここが重要）
         if not (
             user.guild_permissions.administrator or
             user.guild_permissions.manage_channels
         ):
+            print("❌ 権限なし")
             return await interaction.response.send_message(
                 "❌ この操作は管理者のみ可能です",
                 ephemeral=True
             )
 
-        await interaction.response.send_message("🔒 チケットを削除します...", ephemeral=True)
+        await interaction.response.send_message(
+            "🔒 チケットを削除します...",
+            ephemeral=True
+        )
+
+        print(f"🗑 削除: {interaction.channel.name}")
 
         await interaction.channel.delete()
 
@@ -88,9 +102,6 @@ class TicketCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # =====================
-    # パネル設置
-    # =====================
     @app_commands.command(
         name="ticket_panel",
         description="チケットパネルを設置します"
@@ -99,7 +110,7 @@ class TicketCog(commands.Cog):
         channel="設置チャンネル",
         title="タイトル",
         description="説明文",
-        image="画像（任意・スマホ対応）"
+        image="画像（任意）"
     )
     async def ticket_panel(
         self,
@@ -109,6 +120,8 @@ class TicketCog(commands.Cog):
         description: str,
         image: discord.Attachment = None
     ):
+
+        print("📌 ticket_panel EXECUTED")
 
         embed = discord.Embed(
             title=title,

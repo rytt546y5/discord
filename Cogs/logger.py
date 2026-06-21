@@ -21,9 +21,6 @@ class Logger(commands.Cog):
 def init(self, bot):
 self.bot = bot
 
-# =========================
-# ログチャンネル設定
-# =========================
 @app_commands.command(
     name="logger",
     description="参加・退出ログチャンネルを設定します"
@@ -41,9 +38,6 @@ async def logger(
         f"✅ ログチャンネルを {channel.mention} に設定しました",
         ephemeral=True
     )
-# =========================
-# 参加ログ
-# =========================
 @commands.Cog.listener()
 async def on_member_join(self, member: discord.Member):
     data = load_data()
@@ -64,10 +58,15 @@ async def on_member_join(self, member: discord.Member):
     )
     embed.add_field(
         name="アカウント作成日",
-        value=discord.utils.format_dt(member.created_at, style="F"),
+        value=discord.utils.format_dt(
+            member.created_at,
+            style="F"
+        ),
         inline=False
     )
-    embed.set_thumbnail(url=member.display_avatar.url)
+    embed.set_thumbnail(
+        url=member.display_avatar.url
+    )
     embed.set_footer(
         text=f"Member Count: {member.guild.member_count}"
     )
@@ -75,9 +74,6 @@ async def on_member_join(self, member: discord.Member):
         await channel.send(embed=embed)
     except Exception:
         pass
-# =========================
-# 退出ログ
-# =========================
 @commands.Cog.listener()
 async def on_member_remove(self, member: discord.Member):
     data = load_data()
@@ -96,7 +92,9 @@ async def on_member_remove(self, member: discord.Member):
         value=f"{member}\nID: {member.id}",
         inline=False
     )
-    embed.set_thumbnail(url=member.display_avatar.url)
+    embed.set_thumbnail(
+        url=member.display_avatar.url
+    )
     embed.set_footer(
         text=f"Member Count: {member.guild.member_count}"
     )

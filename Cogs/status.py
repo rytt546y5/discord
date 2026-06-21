@@ -4,7 +4,7 @@ from discord import app_commands
 import json
 import os
 
-DATA_FILE = "user_status.json"
+DATA_FILE = "status_data.json"
 
 
 def load_data():
@@ -20,46 +20,54 @@ def save_data(data):
 
 
 # =====================
-# STATUS PANEL
+# VIEW（パネル）
 # =====================
-class Status(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
+class StatusView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
 
-    @app_commands.command(
-        name="status",
-        description="対応状況を表示・設定"
-    )
-    async def status(
-        self,
-        interaction: discord.Interaction,
-        state: str = None
-    ):
-        """
-        state:
-        ・online = 対応可能
-        ・busy = 対応中
-        ・offline = 対応不可
-        """
-
+    def set_status(self, user_id: int, state: str):
         data = load_data()
+        data[str(user_id)] = state
+        save_data(data)
 
-        # =====================
-        # 設定モード
-        # =====================
-        if state:
-            data[str(interaction.user.id)] = state
-            save_data(data)
+    def get_status(self, user_id: int):
+        data = load_data()
+        return data.get(str(user_id), "offline")
 
-            return await interaction.response.send_message(
-                f"✅ 状態更新: {state}",
-                ephemeral=True
-            )
+    # 🟢対応可能
+    @discord.ui.button(label="🟢 対応可能", style=discord.ButtonStyle.green, custom_id="status_online")
+    async def online(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.set_status(interaction.user.id, "online")
 
-        # =====================
-        # 表示モード
-        # =====================
-        state = data.get(str(interaction.user.id), "offline")
+        await interaction.response.edit_message(
+            embed=self.make_embed(interaction.user.id),
+            view=self
+        )
+
+    # 🟡対応中
+    @discord.ui.button(label="🟡 対応中", style=discord.ButtonStyle.gray, custom_id="status_busy")
+    async def busy(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.set_status(interaction.user.id, "busy")
+
+        await interaction.response.edit_message(
+            embed=self.make_embed(interaction.user.id),
+            view=self
+        )
+
+    # 🔴対応不可
+    @discord.ui.button(label="🔴 対応不可", style=discord.ButtonStyle.red, custom_id="status_offline")
+    async def offline(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.set_status(interaction.user.id, "offline")
+
+        await interaction.response.edit_message(
+            embed=self.make_embed(interaction.user.id),
+            view=self
+        )
+
+    # 表示
+    def make_embed(self, user_id: int):
+        state = self.get_status(user_id)
 
         if state == "online":
             text = "🟢 対応可能"
@@ -74,13 +82,29 @@ class Status(commands.Cog):
             color=discord.Color.blurple()
         )
 
-        embed.set_footer(text="あなたの対応状況")
-
-        await interaction.response.send_message(embed=embed)
+        return embed
 
 
 # =====================
-# SETUP
+# COG
 # =====================
+class Status(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @app_commands.command(
+        name="status",
+        description="対応ステータスパネル表示"
+    )
+    async def status(self, interaction: discord.Interaction):
+
+        view = StatusView()
+
+        await interaction.response.send_message(
+            embed=view.make_embed(interaction.user.id),
+            view=view
+        )
+
+
 async def setup(bot):
     await bot.add_cog(Status(bot))

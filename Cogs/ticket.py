@@ -13,16 +13,19 @@ class TicketView(discord.ui.View):
     @discord.ui.button(
         label="🎟 チケット作成",
         style=discord.ButtonStyle.green,
-        custom_id="ticket_create_v1"  # 💥バージョン固定（重要）
+        custom_id="ticket_create_v2"
     )
     async def create(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        print("🔥 TICKET CLICK")
+        # 💥デバッグ（最重要）
+        print("🔥 CLICK:", interaction.user.id)
 
         guild = interaction.guild
         user = interaction.user
 
-        # 💥重複チェック（名前だけじゃなくID基準）
+        # =====================
+        # 重複チェック（確実版）
+        # =====================
         existing = discord.utils.get(
             guild.channels,
             name=f"ticket-{user.id}"
@@ -34,14 +37,16 @@ class TicketView(discord.ui.View):
                 ephemeral=True
             )
 
+        # =====================
         # チャンネル作成
+        # =====================
         channel = await guild.create_text_channel(
             name=f"ticket-{user.id}"
         )
 
         print(f"📁 CREATED: {channel.name}")
 
-        # 権限設定
+        # 権限
         await channel.set_permissions(guild.default_role, view_channel=False)
         await channel.set_permissions(user, view_channel=True, send_messages=True)
 
@@ -69,13 +74,15 @@ class TicketCloseView(discord.ui.View):
     @discord.ui.button(
         label="🔒 チケットを閉じる",
         style=discord.ButtonStyle.red,
-        custom_id="ticket_close_v1"  # 💥バージョン固定
+        custom_id="ticket_close_v2"
     )
     async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
 
+        print("🔒 CLOSE CLICK")
+
         user = interaction.user
 
-        # 管理者 or チャンネル所有者だけOK
+        # 管理者 or チャンネル管理権限
         if not (
             user.guild_permissions.administrator or
             user.guild_permissions.manage_channels
@@ -112,7 +119,7 @@ class TicketCog(commands.Cog):
     @app_commands.describe(
         channel="設置チャンネル",
         title="タイトル",
-        description="説明",
+        description="説明文",
         image="画像（任意）"
     )
     async def ticket_panel(
@@ -133,7 +140,7 @@ class TicketCog(commands.Cog):
         )
 
         embed.add_field(
-            name="🎫 使い方",
+            name="🎫 Ticketの使い方",
             value="ボタンを押すとチケットが作成されます",
             inline=False
         )

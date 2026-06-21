@@ -8,7 +8,7 @@ load_dotenv()
 
 TOKEN = os.getenv("TOKEN")
 
-STATUS = "Developer_very_"
+STATUS = "Developer_very!_"
 GUILD_ID = 1517761896390983750
 
 
@@ -16,6 +16,12 @@ GUILD_ID = 1517761896390983750
 # BOT CLASS
 # =====================
 class MyBot(commands.Bot):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # 💥ここで必ず初期化（重要）
+        self.embed_footer = "Createby:@keru_developer_"
+
     async def setup_hook(self):
         print("Loading Cogs...")
 
@@ -27,24 +33,18 @@ class MyBot(commands.Bot):
                 try:
                     await self.load_extension(f"Cogs.{filename[:-3]}")
                     print(f"Loaded: {filename}")
-                except Exception as e:
+                except Exception:
                     print(f"Failed: {filename}")
                     traceback.print_exc()
 
         guild = discord.Object(id=GUILD_ID)
 
         # =====================
-        # 💥完全安定SYNC構成
+        # 💥SYNC（安定版）
         # =====================
 
-        # guildコマンドリセット
-        self.tree.clear_commands(guild=guild)
-
-        # guild sync（即時反映）
+        # ※clear_commandsは不安定なので削除
         await self.tree.sync(guild=guild)
-
-        # global sync（キャッシュ安定化）
-        await self.tree.sync()
 
         print("SYNC DONE (PRO MODE)")
 
@@ -63,7 +63,6 @@ bot = MyBot(command_prefix="$", intents=intents, help_command=None)
 async def on_ready():
     print("起動成功👍")
 
-    # 💥ステータス安定版
     await bot.change_presence(
         activity=discord.Game(name=STATUS),
         status=discord.Status.online

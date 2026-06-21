@@ -4,7 +4,7 @@ from discord import app_commands
 
 
 # =====================
-# VIEW（永続ボタン）
+# VIEW（永続対応）
 # =====================
 class VerifyView(discord.ui.View):
     def __init__(self, role_id: int):
@@ -47,9 +47,12 @@ class Verify(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    # =====================
+    # パネル設置コマンド
+    # =====================
     @app_commands.command(
         name="verify_panel",
-        description="認証パネル設置"
+        description="認証パネルを設置します"
     )
     async def verify_panel(
         self,
@@ -68,8 +71,8 @@ class Verify(commands.Cog):
         )
 
         embed.add_field(
-            name="📌 認証",
-            value=f"このボタンで {role.mention} を付与します",
+            name="📌 認証方法",
+            value=f"ボタンを押すと {role.mention} が付与されます",
             inline=False
         )
 
@@ -87,5 +90,8 @@ class Verify(commands.Cog):
         )
 
 
+# =====================
+# SETUP
+# =====================
 async def setup(bot):
     await bot.add_cog(Verify(bot))

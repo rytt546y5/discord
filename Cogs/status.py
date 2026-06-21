@@ -1,125 +1,86 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-from datetime import datetime
+import json
+import os
 
-class StatusView(discord.ui.View):
-def init(self):
-super().init(timeout=None)
+DATA_FILE = "user_status.json"
 
-async def update_status(
-    self,
-    interaction: discord.Interaction,
-    status_text: str,
-    color: discord.Color
-):
-    if not interaction.user.guild_permissions.administrator:
-        return await interaction.response.send_message(
-            "❌ 管理者のみ使用できます",
-            ephemeral=True
+
+def load_data():
+    if not os.path.exists(DATA_FILE):
+        return {}
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_data(data):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+
+# =====================
+# STATUS PANEL
+# =====================
+class Status(commands.Cog):
+    def __init__(self, bot):
+        self.bot = bot
+
+    @app_commands.command(
+        name="status",
+        description="対応状況を表示・設定"
+    )
+    async def status(
+        self,
+        interaction: discord.Interaction,
+        state: str = None
+    ):
+        """
+        state:
+        ・online = 対応可能
+        ・busy = 対応中
+        ・offline = 対応不可
+        """
+
+        data = load_data()
+
+        # =====================
+        # 設定モード
+        # =====================
+        if state:
+            data[str(interaction.user.id)] = state
+            save_data(data)
+
+            return await interaction.response.send_message(
+                f"✅ 状態更新: {state}",
+                ephemeral=True
+            )
+
+        # =====================
+        # 表示モード
+        # =====================
+        state = data.get(str(interaction.user.id), "offline")
+
+        if state == "online":
+            text = "🟢 対応可能"
+        elif state == "busy":
+            text = "🟡 対応中"
+        else:
+            text = "🔴 対応不可"
+
+        embed = discord.Embed(
+            title="📌 対応ステータス",
+            description=text,
+            color=discord.Color.blurple()
         )
-    now = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
-    embed = discord.Embed(
-        title="対応ステータス",
-        description=status_text,
-        color=color
-    )
-    embed.add_field(
-        name="更新者",
-        value=interaction.user.mention,
-        inline=False
-    )
-    embed.add_field(
-        name="更新時刻",
-        value=now,
-        inline=False
-    )
-    await interaction.message.edit(
-        embed=embed,
-        view=self
-    )
-    await interaction.response.send_message(
-        "✅ 更新しました",
-        ephemeral=True
-    )
-@discord.ui.button(
-    label="🟢 対応中",
-    style=discord.ButtonStyle.green,
-    custom_id="status_green"
-)
-async def green(
-    self,
-    interaction: discord.Interaction,
-    button: discord.ui.Button
-):
-    await self.update_status(
-        interaction,
-        "🟢 対応中",
-        discord.Color.green()
-    )
-@discord.ui.button(
-    label="🟡 離席中",
-    style=discord.ButtonStyle.secondary,
-    custom_id="status_yellow"
-)
-async def yellow(
-    self,
-    interaction: discord.Interaction,
-    button: discord.ui.Button
-):
-    await self.update_status(
-        interaction,
-        "🟡 離席中",
-        discord.Color.gold()
-    )
-@discord.ui.button(
-    label="🔴 対応不可",
-    style=discord.ButtonStyle.red,
-    custom_id="status_red"
-)
-async def red(
-    self,
-    interaction: discord.Interaction,
-    button: discord.ui.Button
-):
-    await self.update_status(
-        interaction,
-        "🔴 対応不可",
-        discord.Color.red()
-    )
 
-class StatusCog(commands.Cog):
-def init(self, bot):
-self.bot = bot
+        embed.set_footer(text="あなたの対応状況")
 
-@app_commands.command(
-    name="status_panel",
-    description="対応ステータスパネルを設置します"
-)
-@app_commands.default_permissions(administrator=True)
-async def status_panel(
-    self,
-    interaction: discord.Interaction,
-    title: str,
-    description: str,
-    channel: discord.TextChannel
-):
-    embed = discord.Embed(
-        title=title,
-        description=description,
-        color=discord.Color.blurple()
-    )
-    await channel.send(
-        embed=embed,
-        view=StatusView()
-    )
-    await interaction.response.send_message(
-        "✅ ステータスパネルを設置しました",
-        ephemeral=True
-    )
-@commands.Cog.listener()
-async def on_ready(self):
-    self.bot.add_view(StatusView())
+        await interaction.response.send_message(embed=embed)
 
+
+# =====================
+# SETUP
+# =====================
 async def setup(bot):
-await bot.add_cog(StatusCog(bot))
+    await bot.add_cog(Status(bot))

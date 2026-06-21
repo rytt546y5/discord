@@ -62,9 +62,9 @@ async def on_ready():
     print("起動成功👍")
 
     await bot.change_presence(
-        activity=discord.Game(name=STATUS),
-        status=discord.Status.online
-    )
+    activity=discord.Game(name=STATUS),
+    status=discord.Status.online
+)
 
     print("COGS:", list(bot.cogs.keys()))
     print("COMMANDS:", [c.name for c in bot.tree.get_commands()])

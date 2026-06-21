@@ -70,13 +70,17 @@ async def on_ready():
 # =====================
 @bot.tree.error
 async def on_app_command_error(interaction, error):
-    print("❌ ERROR:", error)
     import traceback
-    traceback.print_exc()
+
+    print("=" * 50)
+    print("APP COMMAND ERROR")
+    print(f"COMMAND: {interaction.command}")
+    traceback.print_exception(type(error), error, error.__traceback__)
+    print("=" * 50)
 
     try:
         await interaction.response.send_message(
-            "エラーが発生しました",
+            f"エラー: {error}",
             ephemeral=True
         )
     except:

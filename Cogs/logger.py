@@ -3,119 +3,77 @@ from discord.ext import commands
 from discord import app_commands
 
 
-# =====================
-# LOG VIEW
-# =====================
-class LoggerView(discord.ui.View):
-    def __init__(self, log_channel_id: int):
-        super().__init__(timeout=None)
-        self.log_channel_id = log_channel_id
-
-
-# =====================
-# COG
-# =====================
 class Logger(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(
-        name="set_logger",
-        description="ログチャンネルを設定します"
-    )
-    @app_commands.default_permissions(administrator=True)
-    async def set_logger(
-        self,
-        interaction: discord.Interaction,
-        channel: discord.TextChannel
-    ):
-        guild = interaction.guild
-
-        embed = discord.Embed(
-            title="📌 Logger設定",
-            description=f"ログチャンネル → {channel.mention}",
-            color=discord.Color.blurple()
-        )
-
-        await channel.send(embed=embed)
-
-        await interaction.response.send_message(
-            "✅ ログ設定完了",
-            ephemeral=True
-        )
-
     # =====================
-    # メッセージログ
+    # メッセージ削除ログ
     # =====================
     @commands.Cog.listener()
-    async def on_message_delete(self, message: discord.Message):
-        if not message.guild:
+    async def on_message_delete(self, message):
+
+        if message.author.bot:
             return
 
         embed = discord.Embed(
             title="🗑 メッセージ削除",
-            description=f"チャンネル: {message.channel.mention}",
+            description=f"削除されたメッセージ\n```{message.content}```",
             color=discord.Color.red()
         )
 
-        embed.add_field(
-            name="ユーザー",
-            value=message.author.mention,
-            inline=False
+        embed.set_author(
+            name=str(message.author),
+            icon_url=message.author.display_avatar.url
         )
 
-        embed.add_field(
-            name="内容",
-            value=message.content if message.content else "なし",
-            inline=False
+        channel = discord.utils.get(
+            message.guild.text_channels,
+            name="log"
         )
 
-        await self.send_log(message.guild, embed)
+        if channel:
+            await channel.send(embed=embed)
 
+    # =====================
+    # メッセージ編集ログ
+    # =====================
     @commands.Cog.listener()
     async def on_message_edit(self, before, after):
-        if not before.guild:
-            return
 
-        if before.content == after.content:
+        if before.author.bot:
             return
 
         embed = discord.Embed(
             title="✏ メッセージ編集",
-            description=f"チャンネル: {before.channel.mention}",
             color=discord.Color.orange()
         )
 
         embed.add_field(
             name="Before",
-            value=before.content or "なし",
+            value=before.content or "None",
             inline=False
         )
 
         embed.add_field(
             name="After",
-            value=after.content or "なし",
+            value=after.content or "None",
             inline=False
         )
 
-        await self.send_log(before.guild, embed)
+        embed.set_author(
+            name=str(before.author),
+            icon_url=before.author.display_avatar.url
+        )
 
-    # =====================
-    # 共通送信
-    # =====================
-    async def send_log(self, guild: discord.Guild, embed: discord.Embed):
-        # ここは必要ならDB化できる
-        for channel in guild.text_channels:
-            if "log" in channel.name:
-                try:
-                    await channel.send(embed=embed)
-                    return
-                except:
-                    pass
+        channel = discord.utils.get(
+            before.guild.text_channels,
+            name="log"
+        )
+
+        if channel:
+            await channel.send(embed=embed)
 
 
-# =====================
-# SETUP
-# =====================
 async def setup(bot):
     await bot.add_cog(Logger(bot))

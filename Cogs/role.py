@@ -17,19 +17,36 @@ class RoleButton(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction):
 
-        # 既に持ってるか判定
-        if self.role in interaction.user.roles:
-            await interaction.user.remove_roles(self.role)
+        member = interaction.user
+
+        # 💥権限チェック（事故防止）
+        if not interaction.guild.me.guild_permissions.manage_roles:
             return await interaction.response.send_message(
-                f"❌ {self.role.name} を解除しました",
+                "❌ Botにロール管理権限がありません",
                 ephemeral=True
             )
 
-        await interaction.user.add_roles(self.role)
-        await interaction.response.send_message(
-            f"✅ {self.role.name} を付与しました",
-            ephemeral=True
-        )
+        try:
+            # 付与済みチェック
+            if self.role in member.roles:
+                await member.remove_roles(self.role)
+                return await interaction.response.send_message(
+                    f"❌ {self.role.name} を解除しました",
+                    ephemeral=True
+                )
+
+            await member.add_roles(self.role)
+
+            await interaction.response.send_message(
+                f"✅ {self.role.name} を付与しました",
+                ephemeral=True
+            )
+
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                "❌ ロール階層が原因で操作できません",
+                ephemeral=True
+            )
 
 
 # =====================
@@ -39,7 +56,7 @@ class RolePanelView(discord.ui.View):
     def __init__(self, roles: list[discord.Role]):
         super().__init__(timeout=None)
 
-        self.roles = roles[:5]  # 最大5
+        self.roles = roles[:5]
 
         for role in self.roles:
             self.add_item(RoleButton(role))
@@ -82,7 +99,7 @@ class RolePanel(commands.Cog):
         roles = [role1, role2, role3, role4, role5]
         roles = [r for r in roles if r is not None]
 
-        if len(roles) == 0:
+        if not roles:
             return await interaction.response.send_message(
                 "❌ ロールが指定されていません",
                 ephemeral=True
@@ -94,11 +111,9 @@ class RolePanel(commands.Cog):
             color=discord.Color.gold()
         )
 
-        role_list_text = "\n".join([f"• {r.name}" for r in roles])
-
         embed.add_field(
             name="📌 対象ロール",
-            value=role_list_text,
+            value="\n".join([f"• {r.name}" for r in roles]),
             inline=False
         )
 

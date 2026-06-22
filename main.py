@@ -23,30 +23,20 @@ class MyBot(commands.Bot):
         self.embed_footer = "Createby:@keru_developer_"
 
     async def setup_hook(self):
-        print("Loading Cogs...")
+    print("Loading Cogs...")
 
-        # =====================
-        # COG LOAD
-        # =====================
-        for filename in os.listdir("./Cogs"):
-            if filename.endswith(".py"):
-                try:
-                    await self.load_extension(f"Cogs.{filename[:-3]}")
-                    print(f"Loaded: {filename}")
-                except Exception:
-                    print(f"Failed: {filename}")
-                    traceback.print_exc()
+    for filename in os.listdir("./Cogs"):
+        if filename.endswith(".py"):
+            try:
+                await self.load_extension(f"Cogs.{filename[:-3]}")
+                print(f"Loaded: {filename}")
+            except Exception:
+                traceback.print_exc()
 
-        guild = discord.Object(id=GUILD_ID)
+    # ★これが正解
+    await self.tree.sync()
 
-        # =====================
-        # 💥SYNC（安定版）
-        # =====================
-
-        # ※clear_commandsは不安定なので削除
-        await self.tree.sync(guild=guild)
-
-        print("SYNC DONE (PRO MODE)")
+    print("SYNC DONE (PRO MODE)")
 
 
 # =====================

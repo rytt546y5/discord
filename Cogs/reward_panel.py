@@ -13,94 +13,190 @@ DATA_FILE = "reward_items.json"
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {}
+
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+        json.dump(
+            data,
+            f,
+            indent=2,
+            ensure_ascii=False
+        )
 
 
 # =====================
 # CONFIRM VIEW
 # =====================
 class ConfirmView(discord.ui.View):
-    def __init__(self, item: str):
-        super().__init__(timeout=30)
-        self.item = item
+    def __init__(self, item_name: str):
+        super().__init__(timeout=60)
 
-    @discord.ui.button(label="✅ 受け取る", style=discord.ButtonStyle.success)
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.item_name = item_name
+
+    @discord.ui.button(
+        label="✅ 受け取る",
+        style=discord.ButtonStyle.success
+    )
+    async def confirm(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
+
+        data = load_data()
+        gid = str(interaction.guild.id)
+
+        if gid not in data:
+            return await interaction.response.send_message(
+                "❌ 商品が存在しません",
+                ephemeral=True
+            )
+
+        if self.item_name not in data[gid]:
+            return await interaction.response.send_message(
+                "❌ 商品が存在しません",
+                ephemeral=True
+            )
+
+        item = data[gid][self.item_name]
+
+        mode = item.get("mode", "finite")
+        stock = item.get("stock", [])
+
+        if len(stock) == 0:
+            return await interaction.response.send_message(
+                "❌ 在庫切れです",
+                ephemeral=True
+            )
+
+        # infinite
+        if mode == "infinite":
+            reward_text = stock[0]
+
+        # finite
+        else:
+            reward_text = stock.pop(0)
+            data[gid][self.item_name]["stock"] = stock
+            save_data(data)
 
         try:
+
             embed = discord.Embed(
-                title="📦 商品受け取り",
-                description=f"**{self.item}** を受け取りました",
+                title=f"📦 {self.item_name}",
+                description=reward_text,
                 color=discord.Color.green()
             )
 
-            await interaction.user.send(embed=embed)
+            await interaction.user.send(
+                embed=embed
+            )
 
             await interaction.response.send_message(
-                "📩 DMに送信しました",
+                "✅ DMへ送信しました",
                 ephemeral=True
             )
 
         except discord.Forbidden:
+
             await interaction.response.send_message(
-                "❌ DMが無効です（受信設定を確認してください）",
+                "❌ DMが受け取れません",
                 ephemeral=True
             )
 
 
 # =====================
-# SELECT MENU
+# SELECT
 # =====================
 class ItemSelect(discord.ui.Select):
-    def __init__(self, items: list[str]):
 
-        clean_items = [i.strip() for i in items if i and i.strip()]
+    def __init__(self, guild_id: str):
 
-        options = [
-            discord.SelectOption(
-                label=i[:100],
-                value=i[:100],
-                description="選択して受け取る"
-            )
-            for i in clean_items[:25]
-        ]
+        data = load_data()
+
+        options = []
+
+        if guild_id in data:
+
+            for item_name, item_data in data[guild_id].items():
+
+                mode = item_data.get("mode")
+
+                if mode == "infinite":
+                    stock_text = "∞"
+
+                else:
+                    stock_text = str(
+                        len(
+                            item_data.get("stock", [])
+                        )
+                    )
+
+                options.append(
+                    discord.SelectOption(
+                        label=item_name[:100],
+                        value=item_name,
+                        description=f"在庫: {stock_text}"
+                    )
+                )
 
         super().__init__(
-            placeholder="📦 商品を選択してください",
-            options=options
+            placeholder="📦 商品を選択",
+            min_values=1,
+            max_values=1,
+            options=options[:25]
         )
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(
+        self,
+        interaction: discord.Interaction
+    ):
 
-        selected = self.values[0]
+        item_name = self.values[0]
+
+        data = load_data()
+        gid = str(interaction.guild.id)
+
+        item = data[gid][item_name]
+
+        mode = item.get("mode")
+
+        if mode == "infinite":
+            stock_text = "∞"
+        else:
+            stock_text = str(
+                len(item.get("stock", []))
+            )
 
         embed = discord.Embed(
-            title="📦 確認",
-            description=f"**{selected}** を受け取りますか？",
+            title="📦 商品受け取り確認",
+            description=(
+                f"商品: **{item_name}**\n"
+                f"在庫: **{stock_text}**\n\n"
+                f"受け取りますか？"
+            ),
             color=discord.Color.blurple()
         )
 
         await interaction.response.send_message(
             embed=embed,
-            view=ConfirmView(selected),
+            view=ConfirmView(item_name),
             ephemeral=True
         )
 
 
 class ItemSelectView(discord.ui.View):
-    def __init__(self, items):
-        super().__init__(timeout=None)
-        self.add_item(ItemSelect(items))
+    def __init__(self, guild_id: str):
+        super().__init__(timeout=60)
 
-
-# =====================
-# MAIN PANEL VIEW
+        self.add_item(
+            ItemSelect(guild_id)
+        )
+        # =====================
+# PANEL VIEW
 # =====================
 class RewardPanelView(discord.ui.View):
 
@@ -110,18 +206,25 @@ class RewardPanelView(discord.ui.View):
     @discord.ui.button(
         label="📦 商品を受け取る",
         style=discord.ButtonStyle.primary,
-        custom_id="reward_open"
+        custom_id="reward_open_panel"
     )
-    async def open(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def open_panel(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button
+    ):
 
         data = load_data()
+
         gid = str(interaction.guild.id)
 
-        items = data.get(gid, [])
+        if gid not in data:
+            return await interaction.response.send_message(
+                "❌ 商品がありません",
+                ephemeral=True
+            )
 
-        items = [i for i in items if i and i.strip()]
-
-        if not items:
+        if len(data[gid]) == 0:
             return await interaction.response.send_message(
                 "❌ 商品がありません",
                 ephemeral=True
@@ -129,59 +232,48 @@ class RewardPanelView(discord.ui.View):
 
         await interaction.response.send_message(
             "📦 商品を選択してください",
-            view=ItemSelectView(items),
+            view=ItemSelectView(gid),
             ephemeral=True
         )
-
 
 # =====================
 # COG
 # =====================
 class RewardPanel(commands.Cog):
+
     def __init__(self, bot):
         self.bot = bot
 
-    # 商品追加（単体）
-    @app_commands.command(
-        name="reward_add",
-        description="配布パネルに商品を追加"
-    )
-    @app_commands.describe(item="追加する商品名")
-    async def add(self, interaction: discord.Interaction, item: str):
-
-        data = load_data()
-        gid = str(interaction.guild.id)
-
-        if gid not in data:
-            data[gid] = []
-
-        # 重複防止
-        if item not in data[gid]:
-            data[gid].append(item)
-
-        save_data(data)
-
-        await interaction.response.send_message(
-            f"✅ 商品追加: {item}",
-            ephemeral=True
-        )
-
-    # パネル設置
     @app_commands.command(
         name="reward_panel",
         description="配布パネルを設置"
     )
-    async def panel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+    @app_commands.describe(
+        channel="設置先チャンネル"
+    )
+    async def reward_panel(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel
+    ):
 
         embed = discord.Embed(
             title="🎁 配布パネル",
-            description="ボタンを押して商品を受け取ってください",
+            description=(
+                "下のボタンから商品を受け取れます。"
+            ),
             color=discord.Color.gold()
         )
 
         embed.add_field(
-            name="📌 使い方",
-            value="ボタン → 商品選択 → 確認 → DM送信",
+            name="📦 受け取り方法",
+            value=(
+                "ボタンを押す\n"
+                "↓\n"
+                "商品を選択\n"
+                "↓\n"
+                "DMで受け取る"
+            ),
             inline=False
         )
 
@@ -191,36 +283,16 @@ class RewardPanel(commands.Cog):
         )
 
         await interaction.response.send_message(
-            "✅ パネル設置完了",
-            ephemeral=True
-        )
-
-    # 一括追加（txt）
-    @app_commands.command(
-        name="reward_stock",
-        description="txt形式で商品を一括追加"
-    )
-    async def stock(self, interaction: discord.Interaction, text: str):
-
-        items = [i.strip() for i in text.split("\n") if i.strip()]
-
-        data = load_data()
-        gid = str(interaction.guild.id)
-
-        if gid not in data:
-            data[gid] = []
-
-        for i in items:
-            if i not in data[gid]:
-                data[gid].append(i)
-
-        save_data(data)
-
-        await interaction.response.send_message(
-            f"✅ {len(items)}件追加しました",
+            "✅ 配布パネルを設置しました",
             ephemeral=True
         )
 
 
+# =====================
+# SETUP
+# =====================
 async def setup(bot):
-    await bot.add_cog(RewardPanel(bot))
+
+    await bot.add_cog(
+        RewardPanel(bot)
+    )

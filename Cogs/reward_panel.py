@@ -195,7 +195,7 @@ class ItemSelectView(discord.ui.View):
         self.add_item(
             ItemSelect(guild_id)
         )
-        # =====================
+# =====================
 # PANEL VIEW
 # =====================
 class RewardPanelView(discord.ui.View):

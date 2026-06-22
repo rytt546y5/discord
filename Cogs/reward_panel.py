@@ -196,7 +196,6 @@ class ItemSelectView(discord.ui.View):
             ItemSelect(guild_id)
         )
 
-
 # =====================
 # PANEL VIEW
 # =====================

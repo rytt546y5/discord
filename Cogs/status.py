@@ -31,52 +31,7 @@ STATUS_EMOJI = {
 
 
 # =====================
-# SELECT（状態変更）
-# =====================
-
-class StatusSelect(discord.ui.Select):
-    def __init__(self):
-
-        options = [
-            discord.SelectOption(label="対応可能", value="green", emoji="🟢"),
-            discord.SelectOption(label="対応遅延", value="yellow", emoji="🟡"),
-            discord.SelectOption(label="対応不可", value="red", emoji="🔴"),
-        ]
-
-        super().__init__(
-            placeholder="ステータスを選択してください",
-            min_values=1,
-            max_values=1,
-            options=options,
-            custom_id="status_select"
-        )
-
-    async def callback(self, interaction: discord.Interaction):
-
-        data = load()
-        gid = str(interaction.guild.id)
-
-        data[gid] = {
-            "status": self.values[0],
-            "text": self.values[0]  # 必要なら後で拡張
-        }
-
-        save(data)
-
-        await interaction.response.send_message(
-            f"✅ ステータス更新: {self.values[0]}",
-            ephemeral=True
-        )
-
-
-class StatusSelectView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.add_item(StatusSelect())
-
-
-# =====================
-# VIEW（確認）
+# VIEW① 表示用
 # =====================
 
 class StatusView(discord.ui.View):
@@ -103,16 +58,57 @@ class StatusView(discord.ui.View):
 
         embed = discord.Embed(
             title="📌 対応ステータス",
-            description=f"{STATUS_EMOJI.get(s.get('status'), '⚪')} 現在の状況",
+            description=f"{STATUS_EMOJI.get(s.get('status'))} 現在の状態",
             color=discord.Color.gold()
         )
 
-        # 🔥ここで「変更UI」を一緒に出す
         await interaction.response.send_message(
             embed=embed,
-            view=StatusSelectView(),
             ephemeral=True
         )
+
+
+# =====================
+# VIEW② 管理用（変更）
+# =====================
+
+class StatusSelect(discord.ui.Select):
+    def __init__(self):
+
+        options = [
+            discord.SelectOption(label="対応可能", value="green", emoji="🟢"),
+            discord.SelectOption(label="対応遅延", value="yellow", emoji="🟡"),
+            discord.SelectOption(label="対応不可", value="red", emoji="🔴"),
+        ]
+
+        super().__init__(
+            placeholder="ステータスを変更",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+
+        data = load()
+        gid = str(interaction.guild.id)
+
+        data[gid] = {
+            "status": self.values[0]
+        }
+
+        save(data)
+
+        await interaction.response.send_message(
+            f"✅ 更新: {self.values[0]}",
+            ephemeral=True
+        )
+
+
+class StatusAdminView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(StatusSelect())
 
 
 # =====================
@@ -123,9 +119,13 @@ class Status(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    # =====================
+    # 表示パネル
+    # =====================
+
     @app_commands.command(
         name="status_panel",
-        description="対応ステータスパネルを設置します"
+        description="ユーザー向けステータスパネル設置"
     )
     async def status_panel(
         self,
@@ -135,7 +135,7 @@ class Status(commands.Cog):
 
         embed = discord.Embed(
             title="📌 ステータスパネル",
-            description="🔍ボタンから現在の状況を確認できます",
+            description="🔍 ボタンで現在の状態を確認できます",
             color=discord.Color.blurple()
         )
 
@@ -145,11 +145,47 @@ class Status(commands.Cog):
         )
 
         await interaction.response.send_message(
-            "✅ ステータスパネル設置完了",
+            "✅ 表示パネル設置完了",
+            ephemeral=True
+        )
+
+    # =====================
+    # 管理パネル
+    # =====================
+
+    @app_commands.command(
+        name="status_admin",
+        description="管理者用ステータス変更パネル"
+    )
+    @app_commands.default_permissions(administrator=True)
+    async def status_admin(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel
+    ):
+
+        embed = discord.Embed(
+            title="🛠 ステータス管理",
+            description="ここからステータスを変更できます",
+            color=discord.Color.red()
+        )
+
+        await channel.send(
+            embed=embed,
+            view=StatusAdminView()
+        )
+
+        await interaction.response.send_message(
+            "✅ 管理パネル設置完了",
             ephemeral=True
         )
 
 
+# =====================
+# SETUP
+# =====================
+
 async def setup(bot):
     await bot.add_cog(Status(bot))
     bot.add_view(StatusView())
+    bot.add_view(StatusAdminView())

@@ -23,11 +23,19 @@ def save(data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-STATUS_EMOJI = {
-    "green": "🟢",
-    "yellow": "🟡",
-    "red": "🔴"
+# =====================
+# STATUS DEFINE
+# =====================
+
+STATUS_MAP = {
+    "green": ("🟢", "対応可能"),
+    "yellow": ("🟡", "対応遅延"),
+    "red": ("🔴", "対応不可"),
 }
+
+
+def get_status_text(key: str):
+    return STATUS_MAP.get(key, ("⚪", "不明"))
 
 
 # =====================
@@ -54,11 +62,17 @@ class StatusView(discord.ui.View):
                 ephemeral=True
             )
 
-        s = data[gid]
+        status_key = data[gid].get("status", "red")
+        emoji, text = get_status_text(status_key)
 
         embed = discord.Embed(
             title="📌 対応ステータス",
-            description=f"{STATUS_EMOJI.get(s.get('status', 'red'))} 現在の状況",
+            description=(
+                "🟢 対応可能\n"
+                "🟡 対応遅延\n"
+                "🔴 対応不可\n\n"
+                f"📍 現在：{emoji} {text}"
+            ),
             color=discord.Color.gold()
         )
 
@@ -69,7 +83,7 @@ class StatusView(discord.ui.View):
 
 
 # =====================
-# ADMIN SELECT
+# ADMIN SELECT（変更用）
 # =====================
 
 class StatusSelect(discord.ui.Select):
@@ -106,8 +120,10 @@ class StatusSelect(discord.ui.Select):
 
         save(data)
 
+        emoji, text = get_status_text(self.values[0])
+
         await interaction.response.send_message(
-            f"✅ ステータス更新: {STATUS_EMOJI[self.values[0]]}",
+            f"✅ ステータス更新: {emoji} {text}",
             ephemeral=True
         )
 
@@ -127,12 +143,12 @@ class Status(commands.Cog):
         self.bot = bot
 
     # =====================
-    # ユーザー用パネル
+    # ユーザーパネル
     # =====================
 
     @app_commands.command(
         name="status_panel",
-        description="ユーザー向けステータス確認パネルを設置します"
+        description="ステータス確認パネルを設置します"
     )
     async def status_panel(
         self,
@@ -142,7 +158,7 @@ class Status(commands.Cog):
 
         embed = discord.Embed(
             title="📌 ステータスパネル",
-            description="🔍 ボタンを押すと現在の状況を確認できます",
+            description="🔍 ボタンで現在の状態を確認できます",
             color=discord.Color.blurple()
         )
 
@@ -157,7 +173,7 @@ class Status(commands.Cog):
         )
 
     # =====================
-    # 管理者用パネル
+    # 管理パネル
     # =====================
 
     @app_commands.command(
@@ -173,7 +189,7 @@ class Status(commands.Cog):
 
         embed = discord.Embed(
             title="🛠 ステータス管理パネル",
-            description="下から現在のステータスを変更できます",
+            description="下のセレクトからステータスを変更できます",
             color=discord.Color.red()
         )
 
@@ -189,7 +205,7 @@ class Status(commands.Cog):
 
 
 # =====================
-# SETUP（永続対応）
+# SETUP
 # =====================
 
 async def setup(bot):

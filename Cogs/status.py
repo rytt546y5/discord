@@ -23,8 +23,60 @@ def save(data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
+STATUS_EMOJI = {
+    "green": "🟢",
+    "yellow": "🟡",
+    "red": "🔴"
+}
+
+
 # =====================
-# VIEW（確認ボタン）
+# SELECT（状態変更）
+# =====================
+
+class StatusSelect(discord.ui.Select):
+    def __init__(self):
+
+        options = [
+            discord.SelectOption(label="対応可能", value="green", emoji="🟢"),
+            discord.SelectOption(label="対応遅延", value="yellow", emoji="🟡"),
+            discord.SelectOption(label="対応不可", value="red", emoji="🔴"),
+        ]
+
+        super().__init__(
+            placeholder="ステータスを選択してください",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id="status_select"
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+
+        data = load()
+        gid = str(interaction.guild.id)
+
+        data[gid] = {
+            "status": self.values[0],
+            "text": self.values[0]  # 必要なら後で拡張
+        }
+
+        save(data)
+
+        await interaction.response.send_message(
+            f"✅ ステータス更新: {self.values[0]}",
+            ephemeral=True
+        )
+
+
+class StatusSelectView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.add_item(StatusSelect())
+
+
+# =====================
+# VIEW（確認）
 # =====================
 
 class StatusView(discord.ui.View):
@@ -51,29 +103,14 @@ class StatusView(discord.ui.View):
 
         embed = discord.Embed(
             title="📌 対応ステータス",
+            description=f"{STATUS_EMOJI.get(s.get('status'), '⚪')} 現在の状況",
             color=discord.Color.gold()
         )
 
-        embed.add_field(
-            name="🟢 対応可能",
-            value=s.get("green", "未設定"),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🟡 対応遅延",
-            value=s.get("yellow", "未設定"),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🔴 対応不可",
-            value=s.get("red", "未設定"),
-            inline=False
-        )
-
+        # 🔥ここで「変更UI」を一緒に出す
         await interaction.response.send_message(
             embed=embed,
+            view=StatusSelectView(),
             ephemeral=True
         )
 
@@ -86,43 +123,19 @@ class Status(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # =====================
-    # パネル設置
-    # =====================
-
     @app_commands.command(
         name="status_panel",
         description="対応ステータスパネルを設置します"
     )
-    @app_commands.describe(
-        channel="設置するチャンネル",
-        green="🟢 対応可能の内容",
-        yellow="🟡 対応遅延の内容",
-        red="🔴 対応不可の内容"
-    )
     async def status_panel(
         self,
         interaction: discord.Interaction,
-        channel: discord.TextChannel,
-        green: str,
-        yellow: str,
-        red: str
+        channel: discord.TextChannel
     ):
-
-        data = load()
-        gid = str(interaction.guild.id)
-
-        data[gid] = {
-            "green": green,
-            "yellow": yellow,
-            "red": red
-        }
-
-        save(data)
 
         embed = discord.Embed(
             title="📌 ステータスパネル",
-            description="下のボタンで現在の対応状況を確認できます",
+            description="🔍ボタンから現在の状況を確認できます",
             color=discord.Color.blurple()
         )
 
@@ -136,10 +149,6 @@ class Status(commands.Cog):
             ephemeral=True
         )
 
-
-# =====================
-# SETUP
-# =====================
 
 async def setup(bot):
     await bot.add_cog(Status(bot))

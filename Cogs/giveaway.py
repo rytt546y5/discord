@@ -5,158 +5,169 @@ import json
 import os
 import random
 
-DATA_FILE = “giveaway.json”
+# =====================
+# DATA
+# =====================
 
-=====================
+DATA_FILE = "giveaway_data.json"
 
-DATA
-
-=====================
 
 def load_data():
-if not os.path.exists(DATA_FILE):
-return {}
+    if not os.path.exists(DATA_FILE):
+        return {}
 
-with open(DATA_FILE, "r", encoding="utf-8") as f:
-    return json.load(f)
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
 
 def save_data(data):
-with open(DATA_FILE, “w”, encoding=“utf-8”) as f:
-json.dump(
-data,
-f,
-indent=2,
-ensure_ascii=False
-)
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
-=====================
 
-VIEW
-
-=====================
+# =====================
+# VIEW
+# =====================
 
 class GiveawayView(discord.ui.View):
-def init(self):
-super().init(timeout=None)
+    def __init__(self, message_id: int):
+        super().__init__(timeout=None)
+        self.message_id = message_id
 
-@discord.ui.button(
-    label="🎉 参加する",
-    style=discord.ButtonStyle.green,
-    custom_id="giveaway_join"
-)
-async def join(
-    self,
-    interaction: discord.Interaction,
-    button: discord.ui.Button
-):
-    data = load_data()
-    giveaway_id = str(interaction.message.id)
-    if giveaway_id not in data:
-        data[giveaway_id] = []
-    if interaction.user.id in data[giveaway_id]:
-        return await interaction.response.send_message(
-            "⚠️ すでに参加済みです",
+    @discord.ui.button(
+        label="🎉 参加する",
+        style=discord.ButtonStyle.green,
+        custom_id="giveaway_join"
+    )
+    async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        data = load_data()
+        gid = str(self.message_id)
+
+        if gid not in data:
+            data[gid] = []
+
+        if interaction.user.id in data[gid]:
+            return await interaction.response.send_message(
+                "⚠ すでに参加済みです",
+                ephemeral=True
+            )
+
+        data[gid].append(interaction.user.id)
+        save_data(data)
+
+        await interaction.response.send_message(
+            "✅ 参加しました！",
             ephemeral=True
         )
-    data[giveaway_id].append(
-        interaction.user.id
-    )
-    save_data(data)
-    await interaction.response.send_message(
-        "✅ 抽選に参加しました",
-        ephemeral=True
-    )
 
-=====================
 
-COG
-
-=====================
+# =====================
+# COG
+# =====================
 
 class Giveaway(commands.Cog):
-def init(self, bot):
-self.bot = bot
+    def __init__(self, bot):
+        self.bot = bot
 
-# =====================
-# パネル設置
-# =====================
-@app_commands.command(
-    name="giveaway_panel",
-    description="抽選イベントパネル設置"
-)
-@app_commands.describe(
-    channel="設置チャンネル",
-    title="タイトル",
-    description="説明文",
-    image="画像（任意）"
-)
-async def giveaway_panel(
-    self,
-    interaction: discord.Interaction,
-    channel: discord.TextChannel,
-    title: str,
-    description: str,
-    image: discord.Attachment = None
-):
-    embed = discord.Embed(
-        title=title,
-        description=description,
-        color=discord.Color.gold()
+    # =====================
+    # パネル作成
+    # =====================
+
+    @app_commands.command(
+        name="giveaway_panel",
+        description="抽選イベントパネル設置"
     )
-    if image:
-        embed.set_image(
-            url=image.url
+    async def giveaway_panel(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel,
+        title: str,
+        description: str,
+        image: discord.Attachment = None
+    ):
+
+        embed = discord.Embed(
+            title=title,
+            description=description,
+            color=discord.Color.gold()
         )
-    embed.add_field(
-        name="🎉 参加方法",
-        value="下のボタンを押すだけで参加できます",
-        inline=False
-    )
-    msg = await channel.send(
-        embed=embed,
-        view=GiveawayView()
-    )
-    data = load_data()
-    data[str(msg.id)] = []
-    save_data(data)
-    await interaction.response.send_message(
-        f"✅ giveaway設置完了\n\nメッセージID: `{msg.id}`",
-        ephemeral=True
-    )
-# =====================
-# 抽選
-# =====================
-@app_commands.command(
-    name="giveaway_pick",
-    description="当選者を選出"
-)
-@app_commands.describe(
-    message_id="抽選パネルのメッセージID"
-)
-async def giveaway_pick(
-    self,
-    interaction: discord.Interaction,
-    message_id: str
-):
-    data = load_data()
-    users = data.get(message_id)
-    if not users:
-        return await interaction.response.send_message(
-            "❌ 参加者がいません",
+
+        embed.add_field(
+            name="🎉 参加方法",
+            value="ボタンを押すだけで参加できます",
+            inline=False
+        )
+
+        if image:
+            embed.set_image(url=image.url)
+
+        msg = await channel.send(
+            embed=embed,
+            view=GiveawayView(message_id=0)  # 仮 → 後で差し替え
+        )
+
+        # 保存
+        data = load_data()
+
+        data[str(msg.id)] = {
+            "guild_id": interaction.guild.id,
+            "users": []
+        }
+
+        save_data(data)
+
+        # 🔥 再送（message_id固定でView再生成）
+        await msg.edit(view=GiveawayView(msg.id))
+
+        await interaction.response.send_message(
+            f"✅ giveaway設置完了: {msg.jump_url}",
             ephemeral=True
         )
-    winner_id = random.choice(users)
-    await interaction.response.send_message(
-        f"🎉 当選者\n\n<@{winner_id}>"
+
+    # =====================
+    # 抽選
+    # =====================
+
+    @app_commands.command(
+        name="giveaway_pick",
+        description="当選者をランダム選出"
     )
+    async def pick(
+        self,
+        interaction: discord.Interaction,
+        message_id: str
+    ):
 
-=====================
+        data = load_data()
 
-SETUP
+        users = data.get(message_id, {}).get("users", [])
 
-=====================
+        if not users:
+            return await interaction.response.send_message(
+                "❌ 参加者なし",
+                ephemeral=True
+            )
+
+        winner_id = random.choice(users)
+
+        await interaction.response.send_message(
+            f"🎉 当選者: <@{winner_id}>"
+        )
+
+
+# =====================
+# SETUP（永続View復元）
+# =====================
 
 async def setup(bot):
-await bot.add_cog(
-Giveaway(bot)
-)
+
+    data = load_data()
+
+    for msg_id in data.keys():
+
+        bot.add_view(
+            GiveawayView(message_id=int(msg_id) if msg_id.isdigit() else 0)
+        )
+
+    await bot.add_cog(Giveaway(bot))

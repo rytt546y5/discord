@@ -8,125 +8,125 @@ load_dotenv()
 
 TOKEN = os.getenv("TOKEN")
 
-STATUS = “Developer_very!_”
+STATUS = "Developer_very!_"
 GUILD_ID = 1517761896390983750
 
-Persistent Views
 
+# =====================
+# Persistent Views Import
+# =====================
 from Cogs.achievement import AchievementView
 from Cogs.giveaway import GiveawayView
 from Cogs.verify import VerifyView
 from Cogs.ticket import TicketView, TicketCloseView
 
-=====================
 
-BOT CLASS
-
-=====================
-
+# =====================
+# BOT CLASS
+# =====================
 class MyBot(commands.Bot):
-def init(self, *args, **kwargs):
-super().init(*args, **kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-    self.embed_footer = "Createby:@keru_developer_"
-async def setup_hook(self):
-    print("Loading Cogs...")
-    # =====================
-    # COG LOAD
-    # =====================
-    for filename in os.listdir("./Cogs"):
-        if filename.endswith(".py") and not filename.startswith("_"):
-            try:
-                await self.load_extension(f"Cogs.{filename[:-3]}")
-                print(f"Loaded: {filename}")
-            except Exception:
-                print(f"Failed: {filename}")
-                traceback.print_exc()
-    # =====================
-    # Persistent Views
-    # =====================
-    try:
-        self.add_view(AchievementView())
-        self.add_view(GiveawayView())
-        # 仮対応
-        self.add_view(VerifyView(0))
-        # 仮対応
-        self.add_view(TicketView(0))
-        self.add_view(TicketCloseView())
-        print("Persistent Views Loaded")
-    except Exception:
-        traceback.print_exc()
-    # =====================
-    # SYNC
-    # =====================
-    try:
-        await self.tree.sync()
-        print("SYNC DONE (GLOBAL)")
-    except Exception:
-        traceback.print_exc()
+        self.embed_footer = "Createby:@keru_developer_"
 
-=====================
+    async def setup_hook(self):
+        print("Loading Cogs...")
 
-INTENTS
+        # =====================
+        # COG LOAD
+        # =====================
+        for filename in os.listdir("./Cogs"):
+            if filename.endswith(".py") and not filename.startswith("_"):
+                try:
+                    await self.load_extension(f"Cogs.{filename[:-3]}")
+                    print(f"Loaded: {filename}")
+                except Exception:
+                    print(f"Failed: {filename}")
+                    traceback.print_exc()
 
-=====================
+        # =====================
+        # Persistent Views
+        # =====================
+        try:
+            self.add_view(AchievementView())
+            self.add_view(GiveawayView())
 
+            # role_id不要系はダミーでOK（custom_id管理）
+            self.add_view(VerifyView(role_id=0))
+
+            self.add_view(TicketView(staff_role_id=0))
+            self.add_view(TicketCloseView())
+
+            print("Persistent Views Loaded")
+
+        except Exception:
+            traceback.print_exc()
+
+        # =====================
+        # SYNC
+        # =====================
+        try:
+            await self.tree.sync()
+            print("SYNC DONE (GLOBAL)")
+        except Exception:
+            traceback.print_exc()
+
+
+# =====================
+# INTENTS
+# =====================
 intents = discord.Intents.all()
 
 bot = MyBot(
-command_prefix=”$”,
-intents=intents,
-help_command=None
+    command_prefix="$",
+    intents=intents,
+    help_command=None
 )
 
-=====================
 
-READY EVENT
-
-=====================
-
+# =====================
+# READY EVENT
+# =====================
 @bot.event
 async def on_ready():
-print(“起動成功👍”)
+    print("起動成功👍")
 
-await bot.change_presence(
-    activity=discord.Game(name=STATUS),
-    status=discord.Status.online
-)
-print("COGS:", list(bot.cogs.keys()))
-print("COMMANDS:", [c.name for c in bot.tree.get_commands()])
+    await bot.change_presence(
+        activity=discord.Game(name=STATUS),
+        status=discord.Status.online
+    )
 
-=====================
+    print("COGS:", list(bot.cogs.keys()))
+    print("COMMANDS:", [c.name for c in bot.tree.get_commands()])
 
-ERROR HANDLER
 
-=====================
-
+# =====================
+# ERROR HANDLER
+# =====================
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: Exception):
-print(”=” * 50)
-print(“APP COMMAND ERROR”)
-traceback.print_exception(type(error), error, error.traceback)
-print(”=” * 50)
+    print("=" * 50)
+    print("APP COMMAND ERROR")
+    traceback.print_exception(type(error), error, error.__traceback__)
+    print("=" * 50)
 
-try:
-    if interaction.response.is_done():
-        await interaction.followup.send(
-            f"エラー: {error}",
-            ephemeral=True
-        )
-    else:
-        await interaction.response.send_message(
-            f"エラー: {error}",
-            ephemeral=True
-        )
-except:
-    pass
+    try:
+        if interaction.response.is_done():
+            await interaction.followup.send(
+                f"エラー: {error}",
+                ephemeral=True
+            )
+        else:
+            await interaction.response.send_message(
+                f"エラー: {error}",
+                ephemeral=True
+            )
+    except:
+        pass
 
-=====================
 
-RUN
-
-=====================
-
+# =====================
+# RUN
+# =====================
 bot.run(TOKEN)

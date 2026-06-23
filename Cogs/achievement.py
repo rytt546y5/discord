@@ -10,6 +10,7 @@ DATA_FILE = "achievement_config.json"
 # =====================
 # DATA
 # =====================
+
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {}
@@ -23,13 +24,15 @@ def save_data(data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def stars(n):
+def stars(n: int):
+    n = max(1, min(5, n))
     return "⭐" * n + "☆" * (5 - n)
 
 
 # =====================
 # MODAL
 # =====================
+
 class AchievementModal(discord.ui.Modal):
     def __init__(self, log_channel_id: int):
         super().__init__(title="実績記入")
@@ -63,25 +66,43 @@ class AchievementModal(discord.ui.Modal):
 
         await interaction.response.defer(ephemeral=True)
 
-        channel = interaction.guild.get_channel(self.log_channel_id)
-
-        if not channel:
+        # =====================
+        # CHANNEL FETCH（安定化）
+        # =====================
+        try:
+            channel = await interaction.guild.fetch_channel(self.log_channel_id)
+        except:
             return await interaction.followup.send(
                 "❌ ログチャンネルが見つかりません",
                 ephemeral=True
             )
 
-        try:
-            rating = int(self.rating_input.value)
+        # =====================
+        # INPUT SAFE CHECK
+        # =====================
 
-            if rating < 1 or rating > 5:
-                raise ValueError
+        title = self.title_input.value.strip() or "なし"
+        content = self.content_input.value.strip() or "なし"
 
-        except:
+        value = self.rating_input.value.strip()
+
+        if not value.isdigit():
+            return await interaction.followup.send(
+                "❌ 評価は1〜5の数字で入力してください",
+                ephemeral=True
+            )
+
+        rating = int(value)
+
+        if rating < 1 or rating > 5:
             return await interaction.followup.send(
                 "❌ 評価は1〜5で入力してください",
                 ephemeral=True
             )
+
+        # =====================
+        # EMBED
+        # =====================
 
         embed = discord.Embed(
             title="📊 実績報告",
@@ -97,13 +118,13 @@ class AchievementModal(discord.ui.Modal):
 
         embed.add_field(
             name="🏷 タイトル",
-            value=self.title_input.value,
+            value=title,
             inline=False
         )
 
         embed.add_field(
             name="📝 内容",
-            value=self.content_input.value,
+            value=content,
             inline=False
         )
 
@@ -124,6 +145,7 @@ class AchievementModal(discord.ui.Modal):
 # =====================
 # VIEW
 # =====================
+
 class AchievementView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -152,20 +174,18 @@ class AchievementView(discord.ui.View):
 # =====================
 # COG
 # =====================
+
 class Achievement(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # パネル設置
+    # =====================
+    # PANEL
+    # =====================
+
     @app_commands.command(
         name="achievement_panel",
-        description="実績パネルを設置します（画像対応）"
-    )
-    @app_commands.describe(
-        channel="設置するチャンネル",
-        title="パネルタイトル（例：実績報告）",
-        description="説明文（例：下のボタンから報告できます）",
-        image="パネル画像（任意・スマホアップロード可）"
+        description="実績パネル設置"
     )
     async def panel(
         self,
@@ -191,14 +211,17 @@ class Achievement(commands.Cog):
         )
 
         await interaction.response.send_message(
-            "✅ 実績パネルを設置しました",
+            "✅ 実績パネル設置完了",
             ephemeral=True
         )
 
-    # ログ設定
+    # =====================
+    # LOG SET
+    # =====================
+
     @app_commands.command(
         name="achievement_log",
-        description="実績ログチャンネルを設定"
+        description="実績ログチャンネル設定"
     )
     async def log(
         self,
@@ -215,17 +238,10 @@ class Achievement(commands.Cog):
             ephemeral=True
         )
 
-=====================
 
-SETUP
-
-=====================
+# =====================
+# SETUP
+# =====================
 
 async def setup(bot):
-
-bot.add_view(
-    AchievementView()
-)
-await bot.add_cog(
-    Achievement(bot)
-)
+    await bot.add_cog(Achievement(bot))

@@ -8,17 +8,8 @@ load_dotenv()
 
 TOKEN = os.getenv("TOKEN")
 
-STATUS = "Developer_very!_"
+STATUS = "Developer_very_"
 GUILD_ID = 1517761896390983750
-
-
-# =====================
-# Persistent Views Import
-# =====================
-from Cogs.achievement import AchievementView
-from Cogs.giveaway import GiveawayView
-from Cogs.verify import VerifyView
-from Cogs.ticket import TicketView, TicketCloseView
 
 
 # =====================
@@ -27,15 +18,11 @@ from Cogs.ticket import TicketView, TicketCloseView
 class MyBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
         self.embed_footer = "Createby:@keru_developer_"
 
     async def setup_hook(self):
         print("Loading Cogs...")
 
-        # =====================
-        # COG LOAD
-        # =====================
         for filename in os.listdir("./Cogs"):
             if filename.endswith(".py") and not filename.startswith("_"):
                 try:
@@ -46,16 +33,18 @@ class MyBot(commands.Bot):
                     traceback.print_exc()
 
         # =====================
-        # Persistent Views
+        # Persistent Views（ここ重要）
         # =====================
         try:
+            from Cogs.achievement import AchievementView
+            from Cogs.giveaway import GiveawayView
+            from Cogs.verify import VerifyView
+            from Cogs.ticket import TicketView, TicketCloseView
+
             self.add_view(AchievementView())
-            self.add_view(GiveawayView())
-
-            # role_id不要系はダミーでOK（custom_id管理）
-            self.add_view(VerifyView(role_id=0))
-
-            self.add_view(TicketView(staff_role_id=0))
+            self.add_view(GiveawayView(message_id=0))  # 仮IDでOK
+            self.add_view(VerifyView(0))               # ログ復元用
+            self.add_view(TicketView(0))
             self.add_view(TicketCloseView())
 
             print("Persistent Views Loaded")
@@ -86,7 +75,7 @@ bot = MyBot(
 
 
 # =====================
-# READY EVENT
+# READY
 # =====================
 @bot.event
 async def on_ready():
@@ -102,7 +91,7 @@ async def on_ready():
 
 
 # =====================
-# ERROR HANDLER
+# ERROR
 # =====================
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: Exception):
@@ -113,15 +102,9 @@ async def on_app_command_error(interaction: discord.Interaction, error: Exceptio
 
     try:
         if interaction.response.is_done():
-            await interaction.followup.send(
-                f"エラー: {error}",
-                ephemeral=True
-            )
+            await interaction.followup.send(f"エラー: {error}", ephemeral=True)
         else:
-            await interaction.response.send_message(
-                f"エラー: {error}",
-                ephemeral=True
-            )
+            await interaction.response.send_message(f"エラー: {error}", ephemeral=True)
     except:
         pass
 

@@ -215,6 +215,17 @@ class Achievement(commands.Cog):
             ephemeral=True
         )
 
+=====================
+
+SETUP
+
+=====================
 
 async def setup(bot):
-    await bot.add_cog(Achievement(bot))
+
+bot.add_view(
+    AchievementView()
+)
+await bot.add_cog(
+    Achievement(bot)
+)

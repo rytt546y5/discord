@@ -8,15 +8,18 @@ DATA_FILE = "achievement_config.json"
 
 
 # =====================
-# DATA
+# DATA SAFE
 # =====================
 
 def load_data():
     if not os.path.exists(DATA_FILE):
         return {}
 
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        return {}
 
 
 def save_data(data):
@@ -36,7 +39,6 @@ def stars(n: int):
 class AchievementModal(discord.ui.Modal):
     def __init__(self, log_channel_id: int):
         super().__init__(title="実績記入")
-
         self.log_channel_id = log_channel_id
 
         self.title_input = discord.ui.TextInput(
@@ -67,18 +69,18 @@ class AchievementModal(discord.ui.Modal):
         await interaction.response.defer(ephemeral=True)
 
         # =====================
-        # CHANNEL FETCH（安定化）
+        # CHANNEL SAFE FETCH
         # =====================
         try:
             channel = await interaction.guild.fetch_channel(self.log_channel_id)
-        except:
+        except Exception:
             return await interaction.followup.send(
                 "❌ ログチャンネルが見つかりません",
                 ephemeral=True
             )
 
         # =====================
-        # INPUT SAFE CHECK
+        # INPUT CHECK
         # =====================
 
         title = self.title_input.value.strip() or "なし"
@@ -179,10 +181,6 @@ class Achievement(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    # =====================
-    # PANEL
-    # =====================
-
     @app_commands.command(
         name="achievement_panel",
         description="実績パネル設置"
@@ -214,10 +212,6 @@ class Achievement(commands.Cog):
             "✅ 実績パネル設置完了",
             ephemeral=True
         )
-
-    # =====================
-    # LOG SET
-    # =====================
 
     @app_commands.command(
         name="achievement_log",

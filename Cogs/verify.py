@@ -132,18 +132,23 @@ class Verify(commands.Cog):
 async def setup(bot):
 
     data = load_data()
+
     loaded_roles = set()
 
-    for panel in data.values():
-        role_id = panel.get("role_id")
-        if not role_id:
-            continue
+    try:
+        for panel in data.values():
+            role_id = panel.get("role_id")
+            if not role_id:
+                continue
 
-        if role_id in loaded_roles:
-            continue
+            if role_id in loaded_roles:
+                continue
 
-        loaded_roles.add(role_id)
+            loaded_roles.add(role_id)
 
-        bot.add_view(VerifyView(role_id))
+            bot.add_view(VerifyView(role_id))
+
+    except Exception as e:
+        print("Verify setup error:", e)
 
     await bot.add_cog(Verify(bot))

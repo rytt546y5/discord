@@ -45,15 +45,15 @@ class GiveawayView(discord.ui.View):
         gid = str(self.message_id)
 
         if gid not in data:
-            data[gid] = []
+            data[gid] = {"users": []}
 
-        if interaction.user.id in data[gid]:
+        if interaction.user.id in data[gid]["users"]:
             return await interaction.response.send_message(
                 "⚠ すでに参加済みです",
                 ephemeral=True
             )
 
-        data[gid].append(interaction.user.id)
+        data[gid]["users"].append(interaction.user.id)
         save_data(data)
 
         await interaction.response.send_message(
@@ -71,7 +71,7 @@ class Giveaway(commands.Cog):
         self.bot = bot
 
     # =====================
-    # パネル作成
+    # PANEL
     # =====================
 
     @app_commands.command(
@@ -104,10 +104,9 @@ class Giveaway(commands.Cog):
 
         msg = await channel.send(
             embed=embed,
-            view=GiveawayView(message_id=0)  # 仮 → 後で差し替え
+            view=GiveawayView(message_id=msg.id if False else 0)
         )
 
-        # 保存
         data = load_data()
 
         data[str(msg.id)] = {
@@ -117,7 +116,6 @@ class Giveaway(commands.Cog):
 
         save_data(data)
 
-        # 🔥 再送（message_id固定でView再生成）
         await msg.edit(view=GiveawayView(msg.id))
 
         await interaction.response.send_message(
@@ -126,7 +124,7 @@ class Giveaway(commands.Cog):
         )
 
     # =====================
-    # 抽選
+    # PICK
     # =====================
 
     @app_commands.command(
@@ -157,7 +155,7 @@ class Giveaway(commands.Cog):
 
 
 # =====================
-# SETUP（永続View復元）
+# SETUP
 # =====================
 
 async def setup(bot):
@@ -165,9 +163,9 @@ async def setup(bot):
     data = load_data()
 
     for msg_id in data.keys():
-
-        bot.add_view(
-            GiveawayView(message_id=int(msg_id) if msg_id.isdigit() else 0)
-        )
+        try:
+            bot.add_view(GiveawayView(int(msg_id)))
+        except:
+            pass
 
     await bot.add_cog(Giveaway(bot))

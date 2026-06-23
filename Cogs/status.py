@@ -4,7 +4,7 @@ from discord import app_commands
 import json
 import os
 
-FILE = “status_data.json”
+FILE = "status_data.json"
 
 =====================
 

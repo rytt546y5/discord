@@ -31,7 +31,7 @@ STATUS_EMOJI = {
 
 
 # =====================
-# VIEW① 表示用
+# USER VIEW（確認用）
 # =====================
 
 class StatusView(discord.ui.View):
@@ -41,7 +41,7 @@ class StatusView(discord.ui.View):
     @discord.ui.button(
         label="🔍 確認",
         style=discord.ButtonStyle.primary,
-        custom_id="status_check"
+        custom_id="status_check_btn"
     )
     async def check(self, interaction: discord.Interaction, button: discord.ui.Button):
 
@@ -58,7 +58,7 @@ class StatusView(discord.ui.View):
 
         embed = discord.Embed(
             title="📌 対応ステータス",
-            description=f"{STATUS_EMOJI.get(s.get('status'))} 現在の状態",
+            description=f"{STATUS_EMOJI.get(s.get('status', 'red'))} 現在の状況",
             color=discord.Color.gold()
         )
 
@@ -69,7 +69,7 @@ class StatusView(discord.ui.View):
 
 
 # =====================
-# VIEW② 管理用（変更）
+# ADMIN SELECT
 # =====================
 
 class StatusSelect(discord.ui.Select):
@@ -82,13 +82,20 @@ class StatusSelect(discord.ui.Select):
         ]
 
         super().__init__(
-            placeholder="ステータスを変更",
+            placeholder="ステータスを変更してください",
             min_values=1,
             max_values=1,
-            options=options
+            options=options,
+            custom_id="status_select_menu"
         )
 
     async def callback(self, interaction: discord.Interaction):
+
+        if not interaction.user.guild_permissions.administrator:
+            return await interaction.response.send_message(
+                "❌ 管理者のみ変更可能です",
+                ephemeral=True
+            )
 
         data = load()
         gid = str(interaction.guild.id)
@@ -100,7 +107,7 @@ class StatusSelect(discord.ui.Select):
         save(data)
 
         await interaction.response.send_message(
-            f"✅ 更新: {self.values[0]}",
+            f"✅ ステータス更新: {STATUS_EMOJI[self.values[0]]}",
             ephemeral=True
         )
 
@@ -120,12 +127,12 @@ class Status(commands.Cog):
         self.bot = bot
 
     # =====================
-    # 表示パネル
+    # ユーザー用パネル
     # =====================
 
     @app_commands.command(
         name="status_panel",
-        description="ユーザー向けステータスパネル設置"
+        description="ユーザー向けステータス確認パネルを設置します"
     )
     async def status_panel(
         self,
@@ -135,7 +142,7 @@ class Status(commands.Cog):
 
         embed = discord.Embed(
             title="📌 ステータスパネル",
-            description="🔍 ボタンで現在の状態を確認できます",
+            description="🔍 ボタンを押すと現在の状況を確認できます",
             color=discord.Color.blurple()
         )
 
@@ -145,17 +152,17 @@ class Status(commands.Cog):
         )
 
         await interaction.response.send_message(
-            "✅ 表示パネル設置完了",
+            "✅ ユーザーパネル設置完了",
             ephemeral=True
         )
 
     # =====================
-    # 管理パネル
+    # 管理者用パネル
     # =====================
 
     @app_commands.command(
         name="status_admin",
-        description="管理者用ステータス変更パネル"
+        description="管理者用ステータス変更パネルを設置します"
     )
     @app_commands.default_permissions(administrator=True)
     async def status_admin(
@@ -165,8 +172,8 @@ class Status(commands.Cog):
     ):
 
         embed = discord.Embed(
-            title="🛠 ステータス管理",
-            description="ここからステータスを変更できます",
+            title="🛠 ステータス管理パネル",
+            description="下から現在のステータスを変更できます",
             color=discord.Color.red()
         )
 
@@ -182,7 +189,7 @@ class Status(commands.Cog):
 
 
 # =====================
-# SETUP
+# SETUP（永続対応）
 # =====================
 
 async def setup(bot):

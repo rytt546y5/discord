@@ -24,6 +24,13 @@ def save(data):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
+STATUS_EMOJI = {
+    "green": "🟢",
+    "yellow": "🟡",
+    "red": "🔴"
+}
+
+
 # =====================
 # COG
 # =====================
@@ -33,12 +40,12 @@ class Status(commands.Cog):
         self.bot = bot
 
     # =====================
-    # ステータス表示
+    # 表示コマンド
     # =====================
 
     @app_commands.command(
         name="status",
-        description="現在のステータスを表示"
+        description="現在の対応ステータスを確認します"
     )
     async def status(self, interaction: discord.Interaction):
 
@@ -47,49 +54,35 @@ class Status(commands.Cog):
 
         if gid not in data:
             return await interaction.response.send_message(
-                "❌ ステータス未設定",
+                "❌ ステータスがまだ設定されていません",
                 ephemeral=True
             )
 
         s = data[gid]
 
+        status = s.get("status", "red")
+        text = s.get("text", "未設定")
+
         embed = discord.Embed(
-            title="📌対応ステータス📌",
+            title="📌 対応ステータス",
+            description=f"{STATUS_EMOJI[status]} {text}",
             color=discord.Color.gold()
-        )
-
-        embed.add_field(
-            name="🟢 対応中",
-            value=s.get("green", "未設定"),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🟡 対応遅延",
-            value=s.get("yellow", "未設定"),
-            inline=False
-        )
-
-        embed.add_field(
-            name="🔴 対応停止",
-            value=s.get("red", "未設定"),
-            inline=False
         )
 
         await interaction.response.send_message(embed=embed)
 
     # =====================
-    # ステータス変更
+    # 変更コマンド
     # =====================
 
     @app_commands.command(
         name="status_set",
-        description="ステータス変更（管理者専用）"
+        description="対応ステータスを変更します（管理者専用）"
     )
     @app_commands.default_permissions(administrator=True)
     @app_commands.describe(
         color="green / yellow / red",
-        text="表示内容"
+        text="表示する内容"
     )
     async def status_set(
         self,
@@ -102,31 +95,22 @@ class Status(commands.Cog):
 
         if color not in ["green", "yellow", "red"]:
             return await interaction.response.send_message(
-                "❌ green / yellow / red のみ使用可能",
+                "❌ green / yellow / red のみ使用可能です",
                 ephemeral=True
             )
 
         data = load()
         gid = str(interaction.guild.id)
 
-        if gid not in data:
-            data[gid] = {
-                "green": "未設定",
-                "yellow": "未設定",
-                "red": "未設定"
-            }
-
-        data[gid][color] = text
-        save(data)
-
-        color_name = {
-            "green": "🟢対応中",
-            "yellow": "🟡対応遅延",
-            "red": "🔴対応停止"
+        data[gid] = {
+            "status": color,
+            "text": text
         }
 
+        save(data)
+
         await interaction.response.send_message(
-            f"✅ {color_name[color]} を更新しました",
+            f"✅ ステータス更新完了: {STATUS_EMOJI[color]}",
             ephemeral=True
         )
 

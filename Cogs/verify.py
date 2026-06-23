@@ -4,13 +4,13 @@ from discord import app_commands
 import json
 import os
 
-DATA_FILE = “verify_config.json”
-
 =====================
 
 DATA
 
 =====================
+
+DATA_FILE = “verify_data.json”
 
 def load_data():
 if not os.path.exists(DATA_FILE):
@@ -35,24 +35,21 @@ VIEW
 =====================
 
 class VerifyView(discord.ui.View):
-def init(self):
+def init(self, role_id: int):
 super().init(timeout=None)
+self.role_id = role_id
 
 @discord.ui.button(
     label="認証する",
     style=discord.ButtonStyle.success,
     custom_id="verify_button"
 )
-async def verify(self, interaction: discord.Interaction, button: discord.ui.Button):
-    data = load_data()
-    config = data.get(str(interaction.channel.id))
-    if not config:
-        return await interaction.response.send_message(
-            "❌ 認証設定が見つかりません",
-            ephemeral=True
-        )
-    role_id = config["role_id"]
-    role = interaction.guild.get_role(role_id)
+async def verify(
+    self,
+    interaction: discord.Interaction,
+    button: discord.ui.Button
+):
+    role = interaction.guild.get_role(self.role_id)
     if role is None:
         return await interaction.response.send_message(
             "❌ ロールが見つかりません",
@@ -71,7 +68,7 @@ async def verify(self, interaction: discord.Interaction, button: discord.ui.Butt
         )
     except discord.Forbidden:
         await interaction.response.send_message(
-            "❌ ロール階層の問題で付与できません",
+            "❌ Botのロール権限が不足しています",
             ephemeral=True
         )
 
@@ -112,10 +109,11 @@ async def verify_panel(
         embed.set_image(url=image.url)
     msg = await channel.send(
         embed=embed,
-        view=VerifyView()
+        view=VerifyView(role.id)
     )
     data = load_data()
-    data[str(msg.channel.id)] = {
+    data[str(msg.id)] = {
+        "guild_id": interaction.guild.id,
         "role_id": role.id
     }
     save_data(data)
@@ -131,4 +129,19 @@ SETUP
 =====================
 
 async def setup(bot):
-await bot.add_cog(Verify(bot))
+
+data = load_data()
+loaded_roles = set()
+for panel in data.values():
+    role_id = panel.get("role_id")
+    if not role_id:
+        continue
+    if role_id in loaded_roles:
+        continue
+    loaded_roles.add(role_id)
+    bot.add_view(
+        VerifyView(role_id)
+    )
+await bot.add_cog(
+    Verify(bot)
+)

@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TOKEN = os.getenv(“TOKEN”)
+TOKEN = os.getenv("TOKEN")
 
 STATUS = “Developer_very!_”
 GUILD_ID = 1517761896390983750

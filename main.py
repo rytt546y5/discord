@@ -10,6 +10,9 @@ TOKEN = os.getenv("TOKEN")
 STATUS = "Developer_very_"
 
 
+# =====================
+# BOT
+# =====================
 class MyBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.all()
@@ -19,18 +22,19 @@ class MyBot(commands.Bot):
             help_command=None
         )
 
-        # =====================
-        # ⭐ これが重要（エラー原因）
-        # =====================
+        # ⭐ vending.py 対策（絶対必要）
         self.embed_footer = "Createby:@penyes114514_developer_"
 
     async def setup_hook(self):
         print("Loading Cogs...")
 
+        # =====================
+        # COG LOAD
+        # =====================
         for file in os.listdir("./Cogs"):
             if file.endswith(".py") and not file.startswith("_"):
 
-                # ❌ reward_views を絶対に読み込まない
+                # ❌ reward_views は絶対にCogとして読み込まない
                 if file == "reward_views.py":
                     continue
 
@@ -38,10 +42,11 @@ class MyBot(commands.Bot):
                     await self.load_extension(f"Cogs.{file[:-3]}")
                     print(f"Loaded: {file}")
                 except Exception:
+                    print(f"Failed: {file}")
                     traceback.print_exc()
 
         # =====================
-        # Persistent Views
+        # PERSISTENT VIEWS
         # =====================
         try:
             from Cogs.reward_views import RewardPanelView
@@ -61,9 +66,15 @@ class MyBot(commands.Bot):
             traceback.print_exc()
 
 
+# =====================
+# BOT INSTANCE
+# =====================
 bot = MyBot()
 
 
+# =====================
+# READY EVENT
+# =====================
 @bot.event
 async def on_ready():
     print("起動成功👍")
@@ -74,22 +85,35 @@ async def on_ready():
     )
 
     print("Cogs:", list(bot.cogs.keys()))
+    print("Commands:", [c.name for c in bot.tree.get_commands()])
 
 
+# =====================
+# ERROR HANDLER
+# =====================
 @bot.tree.error
-async def on_app_command_error(interaction, error):
-    print("ERROR:", error)
+async def on_app_command_error(interaction: discord.Interaction, error: Exception):
+    print("=" * 40)
+    print("APP COMMAND ERROR")
+    traceback.print_exception(type(error), error, error.__traceback__)
+    print("=" * 40)
 
     try:
+        msg = f"エラー: {error}"
+
         if interaction.response.is_done():
-            await interaction.followup.send(f"エラー: {error}", ephemeral=True)
+            await interaction.followup.send(msg, ephemeral=True)
         else:
-            await interaction.response.send_message(f"エラー: {error}", ephemeral=True)
-    except:
+            await interaction.response.send_message(msg, ephemeral=True)
+
+    except Exception:
         pass
 
 
+# =====================
+# RUN
+# =====================
 if not TOKEN:
-    raise RuntimeError("TOKENが設定されていません")
+    raise RuntimeError("TOKENが環境変数に設定されていません")
 
 bot.run(TOKEN)

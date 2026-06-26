@@ -8,7 +8,6 @@ load_dotenv()
 
 TOKEN = os.getenv("TOKEN")
 STATUS = "Developer_very_"
-FOOTER_TEXT = "Createby:@penyes114514_developer_"
 
 
 class MyBot(commands.Bot):
@@ -20,11 +19,21 @@ class MyBot(commands.Bot):
             help_command=None
         )
 
+        # =====================
+        # ⭐ これが重要（エラー原因）
+        # =====================
+        self.embed_footer = "Createby:@penyes114514_developer_"
+
     async def setup_hook(self):
         print("Loading Cogs...")
 
         for file in os.listdir("./Cogs"):
             if file.endswith(".py") and not file.startswith("_"):
+
+                # ❌ reward_views を絶対に読み込まない
+                if file == "reward_views.py":
+                    continue
+
                 try:
                     await self.load_extension(f"Cogs.{file[:-3]}")
                     print(f"Loaded: {file}")
@@ -36,14 +45,15 @@ class MyBot(commands.Bot):
         # =====================
         try:
             from Cogs.reward_views import RewardPanelView
-
-            self.add_view(RewardPanelView())  # ⭐ reward永続化
-
+            self.add_view(RewardPanelView())
             print("Persistent Views Loaded")
 
         except Exception:
             traceback.print_exc()
 
+        # =====================
+        # SYNC
+        # =====================
         try:
             await self.tree.sync()
             print("SYNC DONE")
@@ -78,5 +88,8 @@ async def on_app_command_error(interaction, error):
     except:
         pass
 
+
+if not TOKEN:
+    raise RuntimeError("TOKENが設定されていません")
 
 bot.run(TOKEN)

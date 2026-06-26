@@ -7,18 +7,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 TOKEN = os.getenv("TOKEN")
-
 STATUS = "Developer_very_"
-GUILD_ID = 1517761896390983750
+FOOTER_TEXT = "Createby:@very_developer_"
 
 
 # =====================
-# BOT CLASS
+# BOT
 # =====================
 class MyBot(commands.Bot):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.embed_footer = "Createby:@keru_developer_"
 
     async def setup_hook(self):
         print("Loading Cogs...")
@@ -33,19 +31,23 @@ class MyBot(commands.Bot):
                     traceback.print_exc()
 
         # =====================
-        # Persistent Views（ここ重要）
+        # PERSISTENT VIEWS（ここが重要）
         # =====================
         try:
             from Cogs.achievement import AchievementView
             from Cogs.giveaway import GiveawayView
             from Cogs.verify import VerifyView
             from Cogs.ticket import TicketView, TicketCloseView
+            from Cogs.reward_views import RewardPanelView  # ←追加
 
             self.add_view(AchievementView())
-            self.add_view(GiveawayView(message_id=0))  # 仮IDでOK
-            self.add_view(VerifyView(0))               # ログ復元用
+            self.add_view(GiveawayView(message_id=0))
+            self.add_view(VerifyView(0))
             self.add_view(TicketView(0))
             self.add_view(TicketCloseView())
+
+            # ⭐ Reward追加
+            self.add_view(RewardPanelView())
 
             print("Persistent Views Loaded")
 
@@ -57,7 +59,7 @@ class MyBot(commands.Bot):
         # =====================
         try:
             await self.tree.sync()
-            print("SYNC DONE (GLOBAL)")
+            print("SYNC DONE")
         except Exception:
             traceback.print_exc()
 
@@ -91,7 +93,7 @@ async def on_ready():
 
 
 # =====================
-# ERROR
+# ERROR HANDLER
 # =====================
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error: Exception):

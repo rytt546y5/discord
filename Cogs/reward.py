@@ -4,6 +4,9 @@ from discord import app_commands
 import json
 import os
 
+from .reward_views import RewardPanelView
+
+
 DATA_FILE = "reward_items.json"
 
 
@@ -36,7 +39,7 @@ class Reward(commands.Cog):
         self.bot = bot
 
     # =====================
-    # 商品追加
+    # ADD
     # =====================
     @app_commands.command(name="reward_add", description="商品追加")
     async def reward_add(self, interaction: discord.Interaction, name: str, infinite: bool = False):
@@ -59,7 +62,7 @@ class Reward(commands.Cog):
         await interaction.response.send_message(f"✅ 商品作成: {name}", ephemeral=True)
 
     # =====================
-    # 在庫追加（txt）
+    # STOCK
     # =====================
     @app_commands.command(name="reward_stock", description="在庫追加")
     async def reward_stock(self, interaction: discord.Interaction, name: str, file: discord.Attachment):
@@ -81,9 +84,9 @@ class Reward(commands.Cog):
         await interaction.response.send_message(f"✅ {len(items)}件追加", ephemeral=True)
 
     # =====================
-    # 商品削除
+    # DELETE
     # =====================
-    @app_commands.command(name="reward_delete", description="商品削除")
+    @app_commands.command(name="reward_delete", description="削除")
     async def reward_delete(self, interaction: discord.Interaction, name: str):
 
         data = load_data()
@@ -96,9 +99,9 @@ class Reward(commands.Cog):
         await interaction.response.send_message("🗑 削除完了", ephemeral=True)
 
     # =====================
-    # 一覧
+    # LIST
     # =====================
-    @app_commands.command(name="reward_list", description="商品一覧")
+    @app_commands.command(name="reward_list", description="一覧")
     async def reward_list(self, interaction: discord.Interaction):
 
         data = load_data()
@@ -107,7 +110,7 @@ class Reward(commands.Cog):
         items = data.get(gid, {})
 
         if not items:
-            return await interaction.response.send_message("❌ 商品なし", ephemeral=True)
+            return await interaction.response.send_message("❌ なし", ephemeral=True)
 
         embed = discord.Embed(
             title="📦 商品一覧",
@@ -120,41 +123,32 @@ class Reward(commands.Cog):
 
             stock_text = "∞" if mode == "infinite" else str(len(stock))
 
-            embed.add_field(
-                name=name,
-                value=f"在庫: {stock_text}",
-                inline=False
-            )
+            embed.add_field(name=name, value=f"在庫: {stock_text}", inline=False)
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     # =====================
-    # パネル設置
+    # PANEL
     # =====================
-    @app_commands.command(name="reward_panel", description="配布パネル設置")
+    @app_commands.command(name="reward_panel", description="パネル設置")
     async def reward_panel(self, interaction: discord.Interaction, channel: discord.TextChannel):
 
         embed = discord.Embed(
             title="🎁 配布パネル",
-            description="下のボタンから商品を受け取れます",
+            description="ボタンから商品を受け取れます",
             color=discord.Color.gold()
         )
 
-        view = RewardPanelView()
+        await channel.send(embed=embed, view=RewardPanelView())
 
-        await channel.send(embed=embed, view=view)
-
-        await interaction.response.send_message("✅ パネル設置完了", ephemeral=True)
+        await interaction.response.send_message("✅ 設置完了", ephemeral=True)
 
 
 # =====================
-# 永続View登録
+# SETUP
 # =====================
 async def setup(bot):
-
-    from reward_views import RewardPanelView
+    await bot.add_cog(Reward(bot))
 
     # 永続View登録（重要）
     bot.add_view(RewardPanelView())
-
-    await bot.add_cog(Reward(bot))

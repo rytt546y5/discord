@@ -8,55 +8,42 @@ load_dotenv()
 
 TOKEN = os.getenv("TOKEN")
 STATUS = "Developer_very_"
-FOOTER_TEXT = "Createby:@very_developer_"
+FOOTER_TEXT = "Createby:@penyes114514_developer_"
 
 
-# =====================
-# BOT
-# =====================
 class MyBot(commands.Bot):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self):
+        intents = discord.Intents.all()
+        super().__init__(
+            command_prefix="$",
+            intents=intents,
+            help_command=None
+        )
 
     async def setup_hook(self):
         print("Loading Cogs...")
 
-        for filename in os.listdir("./Cogs"):
-            if filename.endswith(".py") and not filename.startswith("_"):
+        for file in os.listdir("./Cogs"):
+            if file.endswith(".py") and not file.startswith("_"):
                 try:
-                    await self.load_extension(f"Cogs.{filename[:-3]}")
-                    print(f"Loaded: {filename}")
+                    await self.load_extension(f"Cogs.{file[:-3]}")
+                    print(f"Loaded: {file}")
                 except Exception:
-                    print(f"Failed: {filename}")
                     traceback.print_exc()
 
         # =====================
-        # PERSISTENT VIEWS（ここが重要）
+        # Persistent Views
         # =====================
         try:
-            from Cogs.achievement import AchievementView
-            from Cogs.giveaway import GiveawayView
-            from Cogs.verify import VerifyView
-            from Cogs.ticket import TicketView, TicketCloseView
-            from Cogs.reward_views import RewardPanelView  # ←追加
+            from Cogs.reward_views import RewardPanelView
 
-            self.add_view(AchievementView())
-            self.add_view(GiveawayView(message_id=0))
-            self.add_view(VerifyView(0))
-            self.add_view(TicketView(0))
-            self.add_view(TicketCloseView())
-
-            # ⭐ Reward追加
-            self.add_view(RewardPanelView())
+            self.add_view(RewardPanelView())  # ⭐ reward永続化
 
             print("Persistent Views Loaded")
 
         except Exception:
             traceback.print_exc()
 
-        # =====================
-        # SYNC
-        # =====================
         try:
             await self.tree.sync()
             print("SYNC DONE")
@@ -64,21 +51,9 @@ class MyBot(commands.Bot):
             traceback.print_exc()
 
 
-# =====================
-# INTENTS
-# =====================
-intents = discord.Intents.all()
-
-bot = MyBot(
-    command_prefix="$",
-    intents=intents,
-    help_command=None
-)
+bot = MyBot()
 
 
-# =====================
-# READY
-# =====================
 @bot.event
 async def on_ready():
     print("起動成功👍")
@@ -88,19 +63,12 @@ async def on_ready():
         status=discord.Status.online
     )
 
-    print("COGS:", list(bot.cogs.keys()))
-    print("COMMANDS:", [c.name for c in bot.tree.get_commands()])
+    print("Cogs:", list(bot.cogs.keys()))
 
 
-# =====================
-# ERROR HANDLER
-# =====================
 @bot.tree.error
-async def on_app_command_error(interaction: discord.Interaction, error: Exception):
-    print("=" * 50)
-    print("APP COMMAND ERROR")
-    traceback.print_exception(type(error), error, error.__traceback__)
-    print("=" * 50)
+async def on_app_command_error(interaction, error):
+    print("ERROR:", error)
 
     try:
         if interaction.response.is_done():
@@ -111,7 +79,4 @@ async def on_app_command_error(interaction: discord.Interaction, error: Exceptio
         pass
 
 
-# =====================
-# RUN
-# =====================
 bot.run(TOKEN)

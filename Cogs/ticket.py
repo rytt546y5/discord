@@ -5,11 +5,11 @@ import json
 import os
 import re
 import io
+import datetime
 
 # =====================
 # DATA
 # =====================
-
 DATA_FILE = "ticket_data.json"
 CONFIG_FILE = "ticket_config.json"
 
@@ -26,115 +26,115 @@ def save_json(file, data):
 # =====================
 # VIEW（チケット内の操作パネル）
 # =====================
-
 class TicketActionView(discord.ui.View):
     def __init__(self, staff_role_id: int):
         super().__init__(timeout=None)
         self.staff_role_id = staff_role_id
-        self.claimed_by = None # 誰が担当したかを保持
+        self.claimed_by = None
 
     @discord.ui.button(label="🤝 対応する (Claim)", style=discord.ButtonStyle.primary, custom_id="ticket_claim_v2")
     async def claim(self, interaction: discord.Interaction, button: discord.ui.Button):
         role = interaction.guild.get_role(self.staff_role_id)
-        is_staff = role in interaction.user.roles if role else False
-        is_admin = interaction.user.guild_permissions.manage_channels
-
-        if not (is_staff or is_admin):
+        if not (role in interaction.user.roles or interaction.user.guild_permissions.manage_channels):
             return await interaction.response.send_message("❌ スタッフのみが対応可能です。", ephemeral=True)
 
-        self.claimed_by = interaction.user # 担当者をセット
-        
+        self.claimed_by = interaction.user
         user_id_match = re.search(r"ticket-(\d+)", interaction.channel.name)
         user_mention = f"<@{user_id_match.group(1)}>" if user_id_match else "お客様"
 
         embed = discord.Embed(
             title="🤝 担当者が決まりました",
-            description=f"{interaction.user.mention} がこのチケットを担当します。\nこれ以降のご案内は担当スタッフより行います。",
+            description=f"{interaction.user.mention} がこのチケットを担当します。",
             color=discord.Color.blue()
         )
         embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
-        embed.set_footer(text=f"Ticket ID: {interaction.channel.id}")
-
-        self.remove_item(button) # ボタンを消す
+        
+        self.remove_item(button)
         await interaction.response.edit_message(view=self)
         await interaction.channel.send(content=f"{user_mention}", embed=embed)
 
     @discord.ui.button(label="🔒 閉じる (Close)", style=discord.ButtonStyle.red, custom_id="ticket_close_v2")
     async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # 権限チェック
         if not (interaction.user.guild_permissions.administrator or interaction.user.guild_permissions.manage_channels):
             return await interaction.response.send_message("❌ 権限がありません。", ephemeral=True)
 
-        await interaction.response.send_message("⌛ ログを生成してクローズしています...", ephemeral=True)
+        # 1. まず応答を返す（タイムアウト防止）
+        await interaction.response.send_message("⌛ ログを作成してクローズしています...", ephemeral=True)
 
-        # === Transcript (履歴) の生成 ===
+        # 2. ログの生成を試みる
+        log_content = f"--- Ticket Transcript: {interaction.channel.name} ---\n"
+        log_content += f"Generated at: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        
+        # チケット作成者の特定
         user_id_match = re.search(r"ticket-(\d+)", interaction.channel.name)
-        owner_id = user_id_match.group(1) if user_id_match else "不明"
-        owner_member = interaction.guild.get_member(int(owner_id)) if owner_id.isdigit() else None
-        owner_name = f"{owner_member} ({owner_id})" if owner_member else owner_id
+        owner_id = user_id_match.group(1) if user_id_match else None
+        owner = interaction.guild.get_member(int(owner_id)) if owner_id else None
+        
+        log_content += f"Ticket Owner: {owner if owner else owner_id}\n"
+        log_content += f"Claimed by  : {self.claimed_by if self.claimed_by else 'None'}\n"
+        log_content += f"Closed by   : {interaction.user}\n"
+        log_content += "-" * 40 + "\n\n"
 
-        transcript = f"--- Ticket Transcript ---\n"
-        transcript += f"Ticket Name: {interaction.channel.name}\n"
-        transcript += f"Opened by  : {owner_name}\n"
-        transcript += f"Claimed by : {self.claimed_by if self.claimed_by else 'なし'}\n"
-        transcript += f"Closed by  : {interaction.user} ({interaction.user.id})\n"
-        transcript += f"Closed at  : {interaction.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
-        transcript += "-" * 40 + "\n\n"
-
-        async for message in interaction.channel.history(limit=None, oldest_first=True):
-            time_str = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
-            content = message.content if message.content else "[画像/埋め込み]"
-            transcript += f"[{time_str}] {message.author}: {content}\n"
-            if message.attachments:
-                for att in message.attachments:
-                    transcript += f" > Attachment: {att.url}\n"
-
-        file_data = io.BytesIO(transcript.encode("utf-8"))
-        filename = f"transcript-{interaction.channel.name}.txt"
-
-        # 共通ログEmbed
-        log_embed = discord.Embed(
-            title="📑 チケット履歴保存",
-            description=f"チケット `{interaction.channel.name}` が正常にクローズされました。",
-            color=discord.Color.from_rgb(47, 49, 54) # Tickets v2っぽいダークカラー
-        )
-        log_embed.add_field(name="作成者", value=f"<@{owner_id}>", inline=True)
-        log_embed.add_field(name="担当者", value=f"{self.claimed_by.mention if self.claimed_by else 'なし'}", inline=True)
-        log_embed.add_field(name="削除者", value=interaction.user.mention, inline=True)
-        log_embed.set_footer(text="Ticket Transcript System")
-
-        # 1. ログチャンネルへ送信
-        config = load_json(CONFIG_FILE)
-        log_channel_id = config.get(str(interaction.guild.id), {}).get("log_channel")
-        if log_channel_id:
-            log_chan = interaction.guild.get_channel(log_channel_id)
-            if log_chan:
-                file_data.seek(0)
-                await log_chan.send(embed=log_embed, file=discord.File(file_data, filename=filename))
-
-        # 2. スタッフ（削除者）のDMへ送信
         try:
-            file_data.seek(0)
-            await interaction.user.send(embed=log_embed, file=discord.File(file_data, filename=filename))
-        except: pass
+            async for message in interaction.channel.history(limit=None, oldest_first=True):
+                t = message.created_at.strftime("%Y-%m-%d %H:%M:%S")
+                log_content += f"[{t}] {message.author}: {message.clean_content}\n"
+                if message.attachments:
+                    for att in message.attachments:
+                        log_content += f" > Attachment: {att.url}\n"
+        except Exception as e:
+            log_content += f"\n[!] 履歴の一部取得に失敗しました: {e}\n"
 
-        # 3. チケット作成者のDMへ送信 (Tickets v2 仕様)
-        if owner_member:
+        # バイトデータに変換
+        log_file_bytes = log_content.encode("utf-8")
+
+        # 3. ログの送信（失敗しても次の削除へ進む）
+        config = load_json(CONFIG_FILE)
+        log_chan_id = config.get(str(interaction.guild.id), {}).get("log_channel")
+
+        embed = discord.Embed(
+            title="📑 チケットログ保存",
+            description=f"チケット `{interaction.channel.name}` が終了しました。",
+            color=discord.Color.dark_gray(),
+            timestamp=datetime.datetime.now()
+        )
+        embed.add_field(name="作成者", value=f"<@{owner_id}>" if owner_id else "不明")
+        embed.add_field(name="担当者", value=self.claimed_by.mention if self.claimed_by else "なし")
+
+        # 送信先1: ログチャンネル
+        if log_chan_id:
             try:
-                file_data.seek(0)
-                await owner_member.send(
-                    content=f"ご利用ありがとうございました。チケット `{interaction.channel.name}` の履歴です。",
-                    embed=log_embed, 
-                    file=discord.File(file_data, filename=filename)
-                )
-            except: pass
+                chan = interaction.guild.get_channel(int(log_chan_id))
+                if chan:
+                    await chan.send(embed=embed, file=discord.File(io.BytesIO(log_file_bytes), filename=f"log-{interaction.channel.name}.txt"))
+            except Exception as e:
+                print(f"Log Channel Send Error: {e}")
 
-        # チャンネル削除
-        await interaction.channel.delete()
+        # 送信先2: スタッフ（実行者）DM
+        try:
+            await interaction.user.send(embed=embed, file=discord.File(io.BytesIO(log_file_bytes), filename=f"log-{interaction.channel.name}.txt"))
+        except Exception as e:
+            print(f"Staff DM Send Error: {e}")
+
+        # 送信先3: チケット作成者DM
+        if owner:
+            try:
+                await owner.send(content="チケットの履歴です。ご利用ありがとうございました。", embed=embed, file=discord.File(io.BytesIO(log_file_bytes), filename=f"log-{interaction.channel.name}.txt"))
+            except Exception as e:
+                print(f"Owner DM Send Error: {e}")
+
+        # 4. 最後にチャンネルを削除（これだけは絶対にやる）
+        try:
+            await interaction.channel.delete(reason="Ticket Closed")
+        except discord.Forbidden:
+            await interaction.followup.send("❌ チャンネル削除権限がありません。Botに『チャンネルの管理』権限を与えてください。", ephemeral=True)
+        except Exception as e:
+            print(f"Delete Error: {e}")
 
 # =====================
 # VIEW（チケット作成パネル）
 # =====================
-
 class TicketView(discord.ui.View):
     def __init__(self, staff_role_id: int):
         super().__init__(timeout=None)
@@ -163,7 +163,6 @@ class TicketView(discord.ui.View):
             color=discord.Color.green()
         )
         embed.set_thumbnail(url=user.display_avatar.url)
-        embed.add_field(name="通知", value=f"{role.mention if role else 'スタッフ'} に通知されました", inline=False)
 
         await channel.send(
             content=f"{role.mention if role else ''} {user.mention}",
@@ -175,7 +174,6 @@ class TicketView(discord.ui.View):
 # =====================
 # COG / SETUP
 # =====================
-
 class TicketCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot

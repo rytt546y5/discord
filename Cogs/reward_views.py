@@ -60,13 +60,13 @@ class ConfirmView(discord.ui.View):
             channel = interaction.guild.get_channel(int(log_channel_id))
             if channel:
                 log_embed = discord.Embed(
-                    title="📥 商品受け取りログ",
+                    title="📥配布物を受け取りました📥",
                     color=discord.Color.blue()
                 )
                 log_embed.set_thumbnail(url=interaction.user.display_avatar.url)
-                log_embed.add_field(name="ユーザー", value=interaction.user.mention)
-                log_embed.add_field(name="商品名", value=self.item_name)
-                log_embed.set_footer(text="Reward System")
+                log_embed.add_field(name="👤￤ユーザー", value=interaction.user.mention)
+                log_embed.add_field(name="🎁￤商品名", value=self.item_name)
+                log_embed.set_footer(text="またのご利用お待ちしております。")
                 await channel.send(embed=log_embed)
 
 class ItemSelect(discord.ui.Select):

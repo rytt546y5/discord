@@ -1,7 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from reward_views import RewardPanelView, load_json, save_json, REWARD_ITEMS_FILE, REWARD_CONFIG_FILE
+from Cogs.reward_views import RewardPanelView, load_json, save_json, REWARD_ITEMS_FILE, REWARD_CONFIG_FILE
 
 class Reward(commands.Cog):
     def __init__(self, bot):
@@ -32,7 +32,6 @@ class Reward(commands.Cog):
         if name not in items.get(gid, {}):
             return await interaction.response.send_message("❌ 商品が見つかりません。", ephemeral=True)
 
-        # 改行を保持したまま全文を読み込み (splitlinesは禁止)
         content = (await file.read()).decode("utf-8")
         
         items[gid][name]["stock"].append(content)
@@ -79,7 +78,6 @@ class Reward(commands.Cog):
             description="下のボタンを押して商品を受け取ってください。",
             color=discord.Color.blue()
         )
-        # チャンネルに直接送信
         await interaction.channel.send(embed=embed, view=RewardPanelView())
         await interaction.response.send_message("✅ パネルを送信しました。", ephemeral=True)
 

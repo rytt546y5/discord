@@ -1,9 +1,11 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 import json
 import os
 import random
+import time # 追加：Unixタイムスタンプ取得用
+from datetime import datetime, timedelta
 
 # 抽選データ保存用
 DATA_FILE = "giveaway_data.json"
@@ -40,7 +42,10 @@ class GiveawayView(discord.ui.View):
         gid = str(self.message_id)
 
         if gid not in data:
-            data[gid] = {"users": []}
+            return await interaction.response.send_message("❌ この抽選データは見つかりません。", ephemeral=True)
+        
+        if data[gid].get("ended", False):
+            return await interaction.response.send_message("⚠ この抽選は既に終了しています。", ephemeral=True)
 
         if interaction.user.id in data[gid]["users"]:
             return await interaction.response.send_message("⚠ すでに参加済みです", ephemeral=True)
@@ -57,12 +62,60 @@ class GiveawayView(discord.ui.View):
 class Giveaway(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.check_giveaways.start() # 自動終了チェックタスクを開始
+
+    def cog_unload(self):
+        self.check_giveaways.cancel()
+
+    # --- 自動抽選チェック (60秒ごとに確認) ---
+    @tasks.loop(seconds=60)
+    async def check_giveaways(self):
+        data = load_data()
+        now = time.time()
+        changed = False
+
+        for msg_id, info in list(data.items()):
+            # 終了未済かつ締切時間を過ぎている場合
+            if not info.get("ended", False) and info.get("end_time", 0) <= now:
+                await self.end_giveaway(msg_id, info)
+                info["ended"] = True
+                changed = True
+
+        if changed:
+            save_data(data)
+
+    async def end_giveaway(self, msg_id, info):
+        """抽選を終了させて当選者を発表する内部関数"""
+        channel = self.bot.get_channel(info["channel_id"])
+        if not channel:
+            return
+
+        users = info.get("users", [])
+        title = info.get("title", "抽選")
+        
+        if not users:
+            await channel.send(f"📢 **{title}** の抽選結果\n参加者がいなかったため、当選者はありませんでした。")
+            return
+
+        winner_id = random.choice(users)
+        
+        # 当選発表Embed
+        embed = discord.Embed(
+            title="🎊 抽選結果発表 🎊",
+            description=f"**{title}** の当選者が決定しました！",
+            color=discord.Color.purple()
+        )
+        embed.add_field(name="当選者", value=f<@{winner_id}>)
+        embed.set_footer(text="おめでとうございます！")
+        
+        await channel.send(content=f"Congratulations <@{winner_id}>!", embed=embed)
 
     @app_commands.command(name="giveaway_panel", description="抽選イベントパネルを設置します")
     @app_commands.describe(
         channel="パネルを設置するチャンネル",
-        title="抽選のタイトル (例: 1000円分ギフト券)",
+        title="抽選のタイトル",
         description="抽選の説明文",
+        minutes="締切までの時間（分単位）",
         image="パネルに表示する画像 (任意)"
     )
     async def giveaway_panel(
@@ -71,22 +124,27 @@ class Giveaway(commands.Cog):
         channel: discord.TextChannel,
         title: str,
         description: str,
+        minutes: int,
         image: discord.Attachment = None
     ):
-        # 最初にEmbedを作成
+        # 締切時間を計算 (現在時刻 + 指定分)
+        end_timestamp = int(time.time() + (minutes * 60))
+        # Discordのタイムスタンプ形式
+        # <t:時間:R> は「残り5分」のような相対表示
+        # <t:時間:F> は「2023年10月1日 12:00」のような絶対表示
+        time_display = f"<t:{end_timestamp}:F> (<t:{end_timestamp}:R>)"
+
         embed = discord.Embed(
-            title=title,
-            description=description,
+            title=f"🎉 GIVEAWAY: {title}",
+            description=f"{description}\n\n**締切:** {time_display}",
             color=discord.Color.gold()
         )
-        embed.add_field(name="🎉 参加方法", value="下のボタンを押すだけで参加できます", inline=False)
+        embed.add_field(name="🎉 参加方法", value="下のボタンを押して参加！", inline=False)
         if image:
             embed.set_image(url=image.url)
 
         # メッセージを送信
         msg = await channel.send(embed=embed)
-        
-        # IDを紐付けたViewをセット（再起動後も動くようにする）
         view = GiveawayView(msg.id)
         await msg.edit(view=view)
 
@@ -94,39 +152,37 @@ class Giveaway(commands.Cog):
         data = load_data()
         data[str(msg.id)] = {
             "guild_id": interaction.guild.id,
-            "users": []
+            "channel_id": channel.id,
+            "title": title,
+            "users": [],
+            "end_time": end_timestamp,
+            "ended": False
         }
         save_data(data)
 
-        await interaction.response.send_message(f"✅ Giveawayを設置しました: {msg.jump_url}", ephemeral=True)
+        await interaction.response.send_message(f"✅ Giveawayを開始しました（締切: {minutes}分後）", ephemeral=True)
 
-    @app_commands.command(name="giveaway_pick", description="設置済みのパネルから当選者を1名選びます")
-    @app_commands.describe(message_id="抽選パネルのメッセージIDを入力してください")
+    @app_commands.command(name="giveaway_pick", description="手動で今すぐ当選者を選びます")
     async def pick(self, interaction: discord.Interaction, message_id: str):
         data = load_data()
-        panel_data = data.get(message_id)
+        info = data.get(message_id)
 
-        if not panel_data:
-            return await interaction.response.send_message("❌ そのメッセージIDの抽選データが見つかりません。", ephemeral=True)
+        if not info:
+            return await interaction.response.send_message("❌ 抽選データが見つかりません。", ephemeral=True)
 
-        users = panel_data.get("users", [])
-        if not users:
-            return await interaction.response.send_message("❌ 参加者が一人もいません。", ephemeral=True)
+        if info.get("ended"):
+            return await interaction.response.send_message("❌ この抽選は既に終了しています。", ephemeral=True)
 
-        # ランダム選出
-        winner_id = random.choice(users)
-
-        # 当選発表（メンション付き）
-        await interaction.response.send_message(
-            f"🎊 **抽選結果発表** 🎊\n当選者: <@{winner_id}>\nおめでとうございます！"
-        )
+        await self.end_giveaway(message_id, info)
+        info["ended"] = True
+        save_data(data)
+        await interaction.response.send_message("✅ 強制的に抽選を行いました。", ephemeral=True)
 
 # =====================
 # SETUP
 # =====================
 
 async def setup(bot):
-    # 保存されているすべてのパネルのViewを再起動時に登録する
     data = load_data()
     for msg_id in data.keys():
         if msg_id.isdigit():

@@ -12,9 +12,9 @@ import io
 CONFIG_FILE = "ai_config.json"
 KEY_FILE = "api_key.txt"
 
-def load_config():
-    if not os.path.exists(CONFIG_FILE): return {}
-    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+def load_json(file):
+    if not os.path.exists(file): return {}
+    with open(file, "r", encoding="utf-8") as f:
         try: return json.load(f)
         except: return {}
 
@@ -34,10 +34,10 @@ model = None
 if api_key:
     genai.configure(api_key=api_key)
     try:
-        # リストにあった「最新のPro」を指すエイリアスを使用します
+        # リストにあった、最も無料枠が安定している「Flashの最新版」を指定します
         model = genai.GenerativeModel(
-            model_name='gemini-pro-latest', 
-            system_instruction="あなたは優秀なAI助手です。日本語で回答してください。"
+            model_name='gemini-flash-latest', 
+            system_instruction="あなたは優秀なAI助手です。経営系サーバーのサポートとして、丁寧な日本語で回答してください。"
         )
     except Exception as e:
         print(f"⚠️ 初期化エラー: {e}")
@@ -51,8 +51,8 @@ class AIChat(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     async def ai_set_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         if not model:
-            return await interaction.response.send_message("❌ AIの初期化に失敗しています。キーを確認してください。", ephemeral=True)
-        config = load_config()
+            return await interaction.response.send_message("❌ AIの初期化に失敗しています。api_key.txtを確認してください。", ephemeral=True)
+        config = load_json(CONFIG_FILE)
         config[str(interaction.guild.id)] = {"channel_id": channel.id}
         save_config(config)
         await interaction.response.send_message(f"✅ {channel.mention} をAIチャットチャンネルに設定しました。", ephemeral=True)
@@ -70,7 +70,7 @@ class AIChat(commands.Cog):
         if message.author.bot or not message.content or not model:
             return
 
-        config = load_config()
+        config = load_json(CONFIG_FILE)
         target_id = config.get(str(message.guild.id), {}).get("channel_id")
         if message.channel.id != target_id:
             return
@@ -89,8 +89,12 @@ class AIChat(commands.Cog):
                 else:
                     with io.BytesIO(answer.encode("utf-8")) as f:
                         await message.reply("📄 回答が長いためファイルで送信します。", file=discord.File(f, filename="answer.txt"))
+            
             except Exception as e:
-                await message.reply(f"⚠️ エラーが発生しました。時間を置くか、`/ai_clear` を試してください。\n`{e}`")
+                # エラーメッセージを1500文字で切って、Discordのエラー(2000文字制限)を防ぐ
+                err_text = str(e)[:1500]
+                print(f"AI Error: {e}") # 詳細はVPSのログに流す
+                await message.reply(f"⚠️ AIエラーが発生しました。\n内容: `{err_text}`")
 
 async def setup(bot):
     await bot.add_cog(AIChat(bot))

@@ -4,193 +4,159 @@ from discord import app_commands
 import json
 import os
 
-DATA_FILE = "gift_log.json"
-
+DATA_FILE = "data.json"
 
 # =====================
-# DATA
+# DATA MANAGEMENT
 # =====================
 
 def load_data():
     if not os.path.exists(DATA_FILE):
-        return {}
-
+        return {"config": {}, "panels": {}}
     with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
-
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return {"config": {}, "panels": {}}
 
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
-
 # =====================
-# VIEW
+# VIEWS (BUTTONS)
 # =====================
 
-class GiftView(discord.ui.View):
-    def __init__(self, product_name: str, log_channel_id: int):
+class BaseReceiveView(discord.ui.View):
+    """ギフトとリワード共通のボタン処理クラス"""
+    def __init__(self, custom_id: str):
         super().__init__(timeout=None)
-        self.product_name = product_name
-        self.log_channel_id = log_channel_id
+        self.custom_id = custom_id
 
-    @discord.ui.button(
-        label="🎁 受け取る",
-        style=discord.ButtonStyle.green,
-        custom_id="gift_receive"
-    )
-    async def receive(self, interaction: discord.Interaction, button: discord.ui.Button):
-
+    async def handle_receive(self, interaction: discord.Interaction, panel_type: str):
         data = load_data()
-        gid = str(interaction.message.id)
+        msg_id = str(interaction.message.id)
+        guild_id = str(interaction.guild.id)
 
-        # 初期化
-        if gid not in data:
-            data[gid] = []
+        # パネル情報の取得
+        panel_info = data.get("panels", {}).get(msg_id)
+        if not panel_info:
+            return await interaction.response.send_message("❌ このパネルのデータが見つかりません。", ephemeral=True)
 
-        # 重複防止
-        if interaction.user.id in data[gid]:
-            return await interaction.response.send_message(
-                "❌ すでに受け取り済みです",
-                ephemeral=True
-            )
+        # 重複チェック
+        if interaction.user.id in panel_info.get("recipients", []):
+            return await interaction.response.send_message("❌ すでに受け取り済みです。", ephemeral=True)
 
-        data[gid].append(interaction.user.id)
-        save_data(data)
-
-        # =====================
-        # LOG CHANNEL FETCH
-        # =====================
-
+        # ログチャンネルの取得
+        log_key = "gift_log_id" if panel_type == "gift" else "reward_log_id"
+        log_channel_id = data.get("config", {}).get(guild_id, {}).get(log_key)
+        
         try:
-            log_channel = await interaction.guild.fetch_channel(self.log_channel_id)
+            log_channel = await interaction.guild.fetch_channel(log_channel_id)
         except:
-            return await interaction.response.send_message(
-                "❌ ログチャンネルが見つかりません",
-                ephemeral=True
-            )
+            return await interaction.response.send_message("❌ ログチャンネルが設定されていないか、見つかりません。", ephemeral=True)
 
-        # =====================
-        # EMBED
-        # =====================
-
-        embed = discord.Embed(
-            title="🎁 配布ログ",
-            color=discord.Color.gold()
-        )
-
-        embed.set_author(
-            name=str(interaction.user),
-            icon_url=interaction.user.display_avatar.url
-        )
-
-        embed.set_thumbnail(url=interaction.user.display_avatar.url)
-
-        embed.add_field(
-            name="👤 受け取った人",
-            value=interaction.user.mention,
-            inline=False
-        )
-
-        embed.add_field(
-            name="📦 商品",
-            value=self.product_name,
-            inline=False
-        )
-
-        await log_channel.send(embed=embed)
-
-        await interaction.response.send_message(
-            "✅ 受け取り完了しました",
-            ephemeral=True
-        )
-
-
-# =====================
-# COG
-# =====================
-
-class Gift(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
-
-    # =====================
-    # LOG SET
-    # =====================
-
-    @app_commands.command(
-        name="gift_log_set",
-        description="配布ログチャンネル設定"
-    )
-    async def log_set(
-        self,
-        interaction: discord.Interaction,
-        channel: discord.TextChannel
-    ):
-
-        data = load_data()
-        data[str(interaction.guild.id)] = channel.id
+        # データの更新と保存
+        panel_info.setdefault("recipients", []).append(interaction.user.id)
         save_data(data)
 
-        await interaction.response.send_message(
-            "✅ 配布ログチャンネル設定完了",
-            ephemeral=True
-        )
-
-    # =====================
-    # PANEL SET
-    # =====================
-
-    @app_commands.command(
-        name="gift_panel",
-        description="配布パネル設置"
-    )
-    async def panel(
-        self,
-        interaction: discord.Interaction,
-        channel: discord.TextChannel,
-        product_name: str,
-        image: discord.Attachment = None
-    ):
-
-        data = load_data()
-        log_id = data.get(str(interaction.guild.id))
-
-        if not log_id:
-            return await interaction.response.send_message(
-                "❌ 先にログチャンネルを設定してください",
-                ephemeral=True
-            )
-
+        # ログ送信
         embed = discord.Embed(
-            title="🎁 配布パネル",
-            description=f"商品: **{product_name}**",
-            color=discord.Color.green()
+            title=f"🎁 {'配布' if panel_type == 'gift' else '報酬'}受取ログ",
+            color=discord.Color.gold() if panel_type == "gift" else discord.Color.blue()
         )
+        embed.set_author(name=str(interaction.user), icon_url=interaction.user.display_avatar.url)
+        embed.add_field(name="👤 ユーザー", value=interaction.user.mention, inline=True)
+        embed.add_field(name="📦 商品", value=panel_info['product_name'], inline=True)
+        
+        await log_channel.send(embed=embed)
+        await interaction.response.send_message(f"✅ **{panel_info['product_name']}** を受け取りました！", ephemeral=True)
 
-        if image:
-            embed.set_image(url=image.url)
+class GiftView(BaseReceiveView):
+    def __init__(self):
+        super().__init__(custom_id="gift_receive_button")
 
-        embed.add_field(
-            name="📌 受け取り方法",
-            value="ボタンを押すだけで受け取れます",
-            inline=False
-        )
+    @discord.ui.button(label="🎁 ギフトを受け取る", style=discord.ButtonStyle.green, custom_id="gift_receive_button")
+    async def receive(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.handle_receive(interaction, "gift")
 
-        await channel.send(
-            embed=embed,
-            view=GiftView(product_name, log_id)
-        )
+class RewardView(BaseReceiveView):
+    def __init__(self):
+        super().__init__(custom_id="reward_receive_button")
 
-        await interaction.response.send_message(
-            "✅ 配布パネル設置完了",
-            ephemeral=True
-        )
-
+    @discord.ui.button(label="💰 報酬を受け取る", style=discord.ButtonStyle.blurple, custom_id="reward_receive_button")
+    async def receive(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.handle_receive(interaction, "reward")
 
 # =====================
-# SETUP
+# BOT CLASS
 # =====================
 
-async def setup(bot):
-    await bot.add_cog(Gift(bot))
+class MyBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        super().__init__(command_prefix="!", intents=intents)
+
+    async def setup_hook(self):
+        # 永続Viewの登録（これをしないと再起動後にボタンが動かない）
+        self.add_view(GiftView())
+        self.add_view(RewardView())
+        await self.tree.sync()
+
+bot = MyBot()
+
+# =====================
+# COMMANDS
+# =====================
+
+@bot.tree.command(name="setup_logs", description="ログチャンネルを一括設定します")
+@app_commands.describe(gift_log="ギフト用のログチャンネル", reward_log="リワード用のログチャンネル")
+async def setup_logs(interaction: discord.Interaction, gift_log: discord.TextChannel, reward_log: discord.TextChannel):
+    data = load_data()
+    gid = str(interaction.guild.id)
+    
+    if gid not in data["config"]:
+        data["config"][gid] = {}
+    
+    data["config"][gid]["gift_log_id"] = gift_log.id
+    data["config"][gid]["reward_log_id"] = reward_log.id
+    save_data(data)
+    
+    await interaction.response.send_message(f"✅ 設定完了しました。\nギフトログ: {gift_log.mention}\n報酬ログ: {reward_log.mention}", ephemeral=True)
+
+@bot.tree.command(name="gift_panel", description="配布パネルを設置します")
+async def gift_panel(interaction: discord.Interaction, channel: discord.TextChannel, product_name: str, image: discord.Attachment = None):
+    data = load_data()
+    if not data["config"].get(str(interaction.guild.id), {}).get("gift_log_id"):
+        return await interaction.response.send_message("❌ 先に `/setup_logs` でログ設定をしてください。", ephemeral=True)
+
+    embed = discord.Embed(title="🎁 ギフト配布", description=f"商品: **{product_name}**\n下のボタンを押して受け取ってください。", color=discord.Color.green())
+    if image: embed.set_image(url=image.url)
+
+    msg = await channel.send(embed=embed, view=GiftView())
+    
+    # パネル情報を保存
+    data["panels"][str(msg.id)] = {"product_name": product_name, "type": "gift", "recipients": []}
+    save_data(data)
+    
+    await interaction.response.send_message("✅ ギフトパネルを設置しました。", ephemeral=True)
+
+@bot.tree.command(name="reward_panel", description="報酬パネルを設置します")
+async def reward_panel(interaction: discord.Interaction, channel: discord.TextChannel, product_name: str, image: discord.Attachment = None):
+    data = load_data()
+    if not data["config"].get(str(interaction.guild.id), {}).get("reward_log_id"):
+        return await interaction.response.send_message("❌ 先に `/setup_logs` でログ設定をしてください。", ephemeral=True)
+
+    embed = discord.Embed(title="💰 報酬受取", description=f"内容: **{product_name}**\n下のボタンを押して受け取ってください。", color=discord.Color.blue())
+    if image: embed.set_image(url=image.url)
+
+    msg = await channel.send(embed=embed, view=RewardView())
+    
+    # パネル情報を保存
+    data["panels"][str(msg.id)] = {"product_name": product_name, "type": "reward", "recipients": []}
+    save_data(data)
+    
+    await interaction.response.send_message("✅ 報酬パネルを設置しました。", ephemeral=True)
+
+# 実行
+# bot.run("YOUR_TOKEN_HERE")

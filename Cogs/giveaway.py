@@ -37,13 +37,13 @@ class GiveawayView(discord.ui.View):
         data = load_data()
         gid = str(self.message_id)
 
-        if gid not in data:
+        if gid not in data or not isinstance(data[gid], dict):
             return await interaction.response.send_message("❌ この抽選データは見つかりません。", ephemeral=True)
         
         if data[gid].get("ended", False):
             return await interaction.response.send_message("⚠ この抽選は既に終了しています。", ephemeral=True)
 
-        if interaction.user.id in data[gid]["users"]:
+        if interaction.user.id in data[gid].get("users", []):
             return await interaction.response.send_message("⚠ すでに参加済みです", ephemeral=True)
 
         data[gid]["users"].append(interaction.user.id)
@@ -66,6 +66,14 @@ class Giveaway(commands.Cog):
         changed = False
 
         for msg_id, info in list(data.items()):
+            # データの安全チェック: infoが辞書でない場合は古いデータなのでスキップ
+            if not isinstance(info, dict):
+                continue
+            
+            # end_time が設定されていない古いデータもスキップ
+            if "end_time" not in info:
+                continue
+
             if not info.get("ended", False) and info.get("end_time", 0) <= now:
                 await self.end_giveaway(msg_id, info)
                 info["ended"] = True
@@ -75,6 +83,10 @@ class Giveaway(commands.Cog):
             save_data(data)
 
     async def end_giveaway(self, msg_id, info):
+        # channel_id がない場合は処理できないためスキップ
+        if "channel_id" not in info:
+            return
+
         channel = self.bot.get_channel(info["channel_id"])
         if not channel:
             return
@@ -93,7 +105,7 @@ class Giveaway(commands.Cog):
             description=f"**{title}** の当選者が決定しました！",
             color=discord.Color.purple()
         )
-        embed.add_field(name="当選者", value=f"<@{winner_id}>") # ここを修正しました
+        embed.add_field(name="当選者", value=f"<@{winner_id}>")
         embed.set_footer(text="おめでとうございます！")
         
         await channel.send(content=f"Congratulations <@{winner_id}>!", embed=embed)
@@ -149,7 +161,7 @@ class Giveaway(commands.Cog):
         data = load_data()
         info = data.get(message_id)
 
-        if not info:
+        if not info or not isinstance(info, dict):
             return await interaction.response.send_message("❌ 抽選データが見つかりません。", ephemeral=True)
 
         if info.get("ended"):
@@ -162,8 +174,9 @@ class Giveaway(commands.Cog):
 
 async def setup(bot):
     data = load_data()
-    for msg_id in data.keys():
-        if msg_id.isdigit():
+    for msg_id, info in data.items():
+        # infoが辞書形式である場合のみViewを登録
+        if msg_id.isdigit() and isinstance(info, dict):
             bot.add_view(GiveawayView(int(msg_id)))
 
     await bot.add_cog(Giveaway(bot))

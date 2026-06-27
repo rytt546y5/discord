@@ -66,22 +66,27 @@ class Reward(commands.Cog):
     # =====================
     @app_commands.command(name="reward_stock", description="在庫追加")
     async def reward_stock(self, interaction: discord.Interaction, name: str, file: discord.Attachment):
-
+        """
+        修正仕様: txtの内容全体を在庫1件として保存（改行保持）
+        """
         data = load_data()
         gid = str(interaction.guild.id)
 
         if gid not in data or name not in data[gid]:
             return await interaction.response.send_message("❌ 商品なし", ephemeral=True)
 
+        # ファイルを読み込み、デコード（改行を保持したまま全文取得）
         raw = await file.read()
         text = raw.decode("utf-8", errors="ignore")
 
-        items = [x.strip() for x in text.splitlines() if x.strip()]
+        if not text.strip():
+            return await interaction.response.send_message("❌ ファイルが空です", ephemeral=True)
 
-        data[gid][name]["stock"].extend(items)
+        # 全文を1つの要素としてリストに追加
+        data[gid][name]["stock"].append(text)
         save_data(data)
 
-        await interaction.response.send_message(f"✅ {len(items)}件追加", ephemeral=True)
+        await interaction.response.send_message(f"✅ 在庫を1件追加しました（全文保存）", ephemeral=True)
 
     # =====================
     # DELETE
@@ -103,7 +108,9 @@ class Reward(commands.Cog):
     # =====================
     @app_commands.command(name="reward_list", description="一覧")
     async def reward_list(self, interaction: discord.Interaction):
-
+        """
+        修正仕様: 有限は「件数」、無限は「∞」を表示
+        """
         data = load_data()
         gid = str(interaction.guild.id)
 
@@ -118,10 +125,13 @@ class Reward(commands.Cog):
         )
 
         for name, item in items.items():
-            stock = item.get("stock", [])
+            stock_list = item.get("stock", [])
             mode = item.get("mode")
 
-            stock_text = "∞" if mode == "infinite" else str(len(stock))
+            if mode == "infinite":
+                stock_text = "∞"
+            else:
+                stock_text = f"{len(stock_list)}件"
 
             embed.add_field(name=name, value=f"在庫: {stock_text}", inline=False)
 
@@ -150,5 +160,5 @@ class Reward(commands.Cog):
 async def setup(bot):
     await bot.add_cog(Reward(bot))
 
-    # 永続View登録（重要）
+    # 永続View登録
     bot.add_view(RewardPanelView())

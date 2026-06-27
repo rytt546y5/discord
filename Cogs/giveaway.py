@@ -4,7 +4,7 @@ from discord import app_commands
 import json
 import os
 import random
-import time # 追加：Unixタイムスタンプ取得用
+import time
 from datetime import datetime, timedelta
 
 # 抽選データ保存用
@@ -22,10 +22,6 @@ def load_data():
 def save_data(data):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
-
-# =====================
-# VIEW (参加ボタン)
-# =====================
 
 class GiveawayView(discord.ui.View):
     def __init__(self, message_id: int):
@@ -55,19 +51,14 @@ class GiveawayView(discord.ui.View):
 
         await interaction.response.send_message("✅ 参加を受け付けました！", ephemeral=True)
 
-# =====================
-# COG (コマンド本体)
-# =====================
-
 class Giveaway(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.check_giveaways.start() # 自動終了チェックタスクを開始
+        self.check_giveaways.start()
 
     def cog_unload(self):
         self.check_giveaways.cancel()
 
-    # --- 自動抽選チェック (60秒ごとに確認) ---
     @tasks.loop(seconds=60)
     async def check_giveaways(self):
         data = load_data()
@@ -75,7 +66,6 @@ class Giveaway(commands.Cog):
         changed = False
 
         for msg_id, info in list(data.items()):
-            # 終了未済かつ締切時間を過ぎている場合
             if not info.get("ended", False) and info.get("end_time", 0) <= now:
                 await self.end_giveaway(msg_id, info)
                 info["ended"] = True
@@ -85,7 +75,6 @@ class Giveaway(commands.Cog):
             save_data(data)
 
     async def end_giveaway(self, msg_id, info):
-        """抽選を終了させて当選者を発表する内部関数"""
         channel = self.bot.get_channel(info["channel_id"])
         if not channel:
             return
@@ -99,13 +88,12 @@ class Giveaway(commands.Cog):
 
         winner_id = random.choice(users)
         
-        # 当選発表Embed
         embed = discord.Embed(
             title="🎊 抽選結果発表 🎊",
             description=f"**{title}** の当選者が決定しました！",
             color=discord.Color.purple()
         )
-        embed.add_field(name="当選者", value=f<@{winner_id}>)
+        embed.add_field(name="当選者", value=f"<@{winner_id}>") # ここを修正しました
         embed.set_footer(text="おめでとうございます！")
         
         await channel.send(content=f"Congratulations <@{winner_id}>!", embed=embed)
@@ -127,11 +115,7 @@ class Giveaway(commands.Cog):
         minutes: int,
         image: discord.Attachment = None
     ):
-        # 締切時間を計算 (現在時刻 + 指定分)
         end_timestamp = int(time.time() + (minutes * 60))
-        # Discordのタイムスタンプ形式
-        # <t:時間:R> は「残り5分」のような相対表示
-        # <t:時間:F> は「2023年10月1日 12:00」のような絶対表示
         time_display = f"<t:{end_timestamp}:F> (<t:{end_timestamp}:R>)"
 
         embed = discord.Embed(
@@ -143,12 +127,10 @@ class Giveaway(commands.Cog):
         if image:
             embed.set_image(url=image.url)
 
-        # メッセージを送信
         msg = await channel.send(embed=embed)
         view = GiveawayView(msg.id)
         await msg.edit(view=view)
 
-        # データを保存
         data = load_data()
         data[str(msg.id)] = {
             "guild_id": interaction.guild.id,
@@ -177,10 +159,6 @@ class Giveaway(commands.Cog):
         info["ended"] = True
         save_data(data)
         await interaction.response.send_message("✅ 強制的に抽選を行いました。", ephemeral=True)
-
-# =====================
-# SETUP
-# =====================
 
 async def setup(bot):
     data = load_data()

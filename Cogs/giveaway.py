@@ -66,11 +66,9 @@ class Giveaway(commands.Cog):
         changed = False
 
         for msg_id, info in list(data.items()):
-            # データの安全チェック: infoが辞書でない場合は古いデータなのでスキップ
             if not isinstance(info, dict):
                 continue
             
-            # end_time が設定されていない古いデータもスキップ
             if "end_time" not in info:
                 continue
 
@@ -83,7 +81,6 @@ class Giveaway(commands.Cog):
             save_data(data)
 
     async def end_giveaway(self, msg_id, info):
-        # channel_id がない場合は処理できないためスキップ
         if "channel_id" not in info:
             return
 
@@ -115,7 +112,7 @@ class Giveaway(commands.Cog):
         channel="パネルを設置するチャンネル",
         title="抽選のタイトル",
         description="抽選の説明文",
-        minutes="締切までの時間（分単位）",
+        hours="締切までの時間（時間単位）",
         image="パネルに表示する画像 (任意)"
     )
     async def giveaway_panel(
@@ -124,10 +121,11 @@ class Giveaway(commands.Cog):
         channel: discord.TextChannel,
         title: str,
         description: str,
-        minutes: int,
+        hours: int,
         image: discord.Attachment = None
     ):
-        end_timestamp = int(time.time() + (minutes * 60))
+        # 時間を秒に変換 (1時間 = 3600秒)
+        end_timestamp = int(time.time() + (hours * 3600))
         time_display = f"<t:{end_timestamp}:F> (<t:{end_timestamp}:R>)"
 
         embed = discord.Embed(
@@ -154,7 +152,7 @@ class Giveaway(commands.Cog):
         }
         save_data(data)
 
-        await interaction.response.send_message(f"✅ Giveawayを開始しました（締切: {minutes}分後）", ephemeral=True)
+        await interaction.response.send_message(f"✅ Giveawayを開始しました（締切: {hours}時間後）", ephemeral=True)
 
     @app_commands.command(name="giveaway_pick", description="手動で今すぐ当選者を選びます")
     async def pick(self, interaction: discord.Interaction, message_id: str):
@@ -175,7 +173,6 @@ class Giveaway(commands.Cog):
 async def setup(bot):
     data = load_data()
     for msg_id, info in data.items():
-        # infoが辞書形式である場合のみViewを登録
         if msg_id.isdigit() and isinstance(info, dict):
             bot.add_view(GiveawayView(int(msg_id)))
 

@@ -13,57 +13,62 @@ import datetime
 CONFIG_FILE = "ai_config.json"
 KEY_FILE = "api_key.txt"
 
-def get_api_key():
-    """api_key.txtからキーを読み込む"""
-    if os.path.exists(KEY_FILE):
-        with open(KEY_FILE, "r", encoding="utf-8") as f:
-            return f.read().strip()
-    return None
-
-def load_config():
-    if not os.path.exists(CONFIG_FILE): return {}
-    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+def load_json(file):
+    if not os.path.exists(file): return {}
+    with open(file, "r", encoding="utf-8") as f:
         try: return json.load(f)
         except: return {}
 
-def save_config(data):
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
+def save_json(file, data):
+    with open(file, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
-# APIの初期設定
-api_key = get_api_key()
+# APIキーの読み込みと初期化
+api_key = None
+if os.path.exists(KEY_FILE):
+    with open(KEY_FILE, "r", encoding="utf-8") as f:
+        api_key = f.read().strip()
+
 if api_key:
     genai.configure(api_key=api_key)
-    # 最も安定し、かつ高速な 1.5 Flash を使用
-    model = genai.GenerativeModel(
-        model_name='gemini-1.5-flash',
-        system_instruction=(
-            "あなたは経営・取引系Discordサーバーの専属AI助手です。"
-            "プログラミング（Python, Discord.py）の知識が非常に高く、正確なコードを提案します。"
-            "回答は論理的かつ丁寧に行い、経営者であるユーザーを全力でサポートしてください。"
-            "重要な箇所は太字を使い、読みやすい日本語で回答してください。"
+    # 一番標準的な gemini-1.5-flash を指定
+    # もしこれでもダメなら、起動時のログで利用可能なモデルを確認します
+    try:
+        model = genai.GenerativeModel(
+            model_name='gemini-1.5-flash',
+            system_instruction="あなたは優秀なAI助手です。日本語で回答してください。"
         )
-    )
+    except Exception as e:
+        print(f"⚠️ モデル設定エラー: {e}")
+        model = None
 else:
     model = None
-    print("⚠️ [AI Chat] api_key.txt が見つからないためAIを無効化します。")
+    print("⚠️ [AI Chat] api_key.txt が見つかりません。")
 
-# =====================
-# COG
-# =====================
 class AIChat(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.chat_sessions = {} # サーバーごとの履歴
+        self.chat_sessions = {}
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+        """起動時に利用可能なモデルをコンソールに表示する（診断用）"""
+        if api_key:
+            print("--- 利用可能なAIモデルのリスト ---")
+            try:
+                for m in genai.list_models():
+                    if 'generateContent' in m.supported_generation_methods:
+                        print(f"利用可能: {m.name}")
+                print("--------------------------------")
+            except Exception as e:
+                print(f"⚠️ モデルリストの取得に失敗しました。APIキーが無効な可能性があります: {e}")
 
     @app_commands.command(name="ai_set_channel", description="AIが自動回答する専用チャンネルを設定します")
-    @app_commands.describe(channel="AIチャット用にするチャンネル")
-    @app_commands.default_permissions(administrator=True) # 管理者のみ
+    @app_commands.default_permissions(administrator=True)
     async def ai_set_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         if not model:
-            return await interaction.response.send_message("❌ APIキーが読み込めていません。", ephemeral=True)
-        
-        config = load_config()
+            return await interaction.response.send_message("❌ AI機能が初期化されていません。コンソールを確認してください。", ephemeral=True)
+        config = load_json(CONFIG_FILE)
         config[str(interaction.guild.id)] = {"channel_id": channel.id}
         save_config(config)
         await interaction.response.send_message(f"✅ {channel.mention} をAIチャットチャンネルに設定しました。", ephemeral=True)
@@ -74,50 +79,36 @@ class AIChat(commands.Cog):
         gid = str(interaction.guild.id)
         if gid in self.chat_sessions:
             del self.chat_sessions[gid]
-        await interaction.response.send_message("🧹 会話履歴をクリアしました。", ephemeral=True)
+        await interaction.response.send_message("🧹 履歴をクリアしました。", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if message.author.bot or not message.content or not model:
             return
 
-        config = load_config()
+        config = load_json(CONFIG_FILE)
         target_id = config.get(str(message.guild.id), {}).get("channel_id")
-
         if message.channel.id != target_id:
             return
 
-        # AIが回答を生成中であることを示す（入力中...）
         async with message.channel.typing():
             try:
                 gid = str(message.guild.id)
                 if gid not in self.chat_sessions:
                     self.chat_sessions[gid] = model.start_chat(history=[])
 
-                # AIへメッセージ送信
                 response = self.chat_sessions[gid].send_message(message.content)
                 answer = response.text
 
-                # Discord文字数制限(2000)対応
                 if len(answer) <= 2000:
                     await message.reply(answer)
                 else:
-                    # 2000文字を超える場合はファイル出力
                     with io.BytesIO(answer.encode("utf-8")) as f:
-                        await message.reply(
-                            "📄 回答が長文のため、ファイルとして出力しました。",
-                            file=discord.File(f, filename="ai_answer.txt")
-                        )
-
+                        await message.reply("📄 長文のためファイルで回答します。", file=discord.File(f, filename="answer.txt"))
             except Exception as e:
-                # エラーハンドリング
-                err_str = str(e)
-                if "404" in err_str:
-                    await message.reply("⚠️ モデルが見つかりません。設定を確認してください。")
-                elif "quota" in err_str.lower():
-                    await message.reply("⚠️ 無料枠の制限に達しました。しばらく待ってからお試しください。")
-                else:
-                    await message.reply(f"⚠️ エラーが発生しました。`/ai_clear` で解決する場合があります。\n内容: `{err_str}`")
+                # エラーの詳細をコンソールに出力
+                print(f"AI Error: {e}")
+                await message.reply(f"⚠️ エラーが発生しました。コンソールログを確認してください。\n`{e}`")
 
 async def setup(bot):
     await bot.add_cog(AIChat(bot))

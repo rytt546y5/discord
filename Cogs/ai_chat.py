@@ -7,18 +7,18 @@ import os
 import io
 
 # =====================
-# 設定・パス
+# 設定
 # =====================
 CONFIG_FILE = "ai_config.json"
 KEY_FILE = "api_key.txt"
 
-def load_config():
-    if not os.path.exists(CONFIG_FILE): return {}
-    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+def load_json(file):
+    if not os.path.exists(file): return {}
+    with open(file, "r", encoding="utf-8") as f:
         try: return json.load(f)
         except: return {}
 
-def save_config(data):
+def save_json(file, data):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
@@ -28,70 +28,65 @@ def get_api_key():
             return f.read().strip()
     return None
 
-# API設定
 api_key = get_api_key()
 model = None
+
 if api_key:
     genai.configure(api_key=api_key)
+    # あなたの環境で404を出さず、かつ最強知能を呼び出すための特定名称
+    # 'models/gemini-1.5-pro-latest' を試します。
     try:
-        # あなたのリストで確実に動作する名前「gemini-flash-latest」を指定
-        # 「シャバさ」を消すために、命令（System Instruction）を最強レベルに強化
         model = genai.GenerativeModel(
-            model_name='gemini-flash-latest', 
+            model_name='gemini-1.5-pro-latest', 
             system_instruction=(
-                "あなたは、年収数千万円クラスの超エリート経営コンサルタント兼、天才フルスタックエンジニアです。"
-                "【思考プロトコル】"
-                "1. ユーザーの質問に対し、表面的な回答ではなく、その裏にある意図を汲み取って回答してください。"
-                "2. プログラミングの依頼には、バグがなく、効率的で、美しいPythonコードを提供してください。"
-                "3. 経営の相談には、具体的で、即戦力となる戦略をステップバイステップで提示してください。"
-                "4. 常に深呼吸して、論理的に最も優れた答えを導き出してから発言してください。"
-                "【回答スタイル】"
-                "- 無駄な挨拶は省き、結論から述べること。"
-                "- 重要なキーワードは太字で強調すること。"
-                "- 専門家としての威厳を持ちつつ、丁寧な日本語を使うこと。"
+                "あなたは世界最高クラスのAI「Gemini 1.5 Pro」です。経営者であるユーザーに対し、"
+                "妥協のない、最高精度の回答を提供してください。特にPythonコードの生成においては、"
+                "プロ級の品質を保証してください。日本語で論理的に回答してください。"
             )
         )
-    except Exception as e:
-        print(f"⚠️ 初期化失敗: {e}")
+    except:
+        # もし上記がダメなら、標準の名称にフォールバック
+        model = genai.GenerativeModel(model_name='gemini-1.5-pro')
 
 class AIChat(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.chat_sessions = {}
 
-    @app_commands.command(name="ai_set_channel", description="AIが自動回答する専用チャンネルを設定します")
+    @app_commands.command(name="ai_set_channel", description="最高知能Proを連携します")
     @app_commands.default_permissions(administrator=True)
     async def ai_set_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        if not model:
-            return await interaction.response.send_message("❌ AIの初期化に失敗しています。api_key.txtを確認してください。", ephemeral=True)
-        config = load_config()
+        if not model: return await interaction.response.send_message("❌ AI初期化失敗", ephemeral=True)
+        config = load_json(CONFIG_FILE)
         config[str(interaction.guild.id)] = {"channel_id": channel.id}
-        save_config(config)
-        await interaction.response.send_message(f"✅ {channel.mention} を「超知能AI助手」チャンネルに設定しました。", ephemeral=True)
+        save_json(CONFIG_FILE, config)
+        await interaction.response.send_message(f"✅ {channel.mention} で 1.5 Pro を起動しました。", ephemeral=True)
 
-    @app_commands.command(name="ai_clear", description="会話履歴をクリアして知能をリフレッシュします")
+    @app_commands.command(name="ai_clear", description="記憶のリセット")
     @app_commands.default_permissions(administrator=True)
     async def ai_clear(self, interaction: discord.Interaction):
         gid = str(interaction.guild.id)
-        if gid in self.chat_sessions:
-            del self.chat_sessions[gid]
-        await interaction.response.send_message("🧹 記憶をリセットしました。知能がリフレッシュされました。", ephemeral=True)
+        if gid in self.chat_sessions: del self.chat_sessions[gid]
+        await interaction.response.send_message("🧹 履歴をクリアしました。", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.author.bot or not message.content or not model:
-            return
+        if message.author.bot or not message.content or not model: return
 
-        config = load_config()
+        config = load_json(CONFIG_FILE)
         target_id = config.get(str(message.guild.id), {}).get("channel_id")
-        if message.channel.id != target_id:
-            return
+        if message.channel.id != target_id: return
 
         async with message.channel.typing():
             try:
                 gid = str(message.guild.id)
                 if gid not in self.chat_sessions:
                     self.chat_sessions[gid] = model.start_chat(history=[])
+
+                # 【知能維持のための調整】
+                # Proは情報量が多いので、履歴は直近10往復(20件)に絞ってエラーを防ぐ
+                if len(self.chat_sessions[gid].history) > 20:
+                    self.chat_sessions[gid].history = self.chat_sessions[gid].history[-20:]
 
                 response = self.chat_sessions[gid].send_message(message.content)
                 answer = response.text
@@ -100,14 +95,16 @@ class AIChat(commands.Cog):
                     await message.reply(answer)
                 else:
                     with io.BytesIO(answer.encode("utf-8")) as f:
-                        await message.reply("📄 プロ級の長文回答となったため、ファイルで出力します。", file=discord.File(f, filename="answer.txt"))
+                        await message.reply("📄 高性能回答をファイル化しました。", file=discord.File(f, filename="pro_answer.txt"))
             
             except Exception as e:
-                err_text = str(e)
-                if "429" in err_text:
-                    await message.reply("⚠️ 現在、Google側の回数制限がかかっています。1分ほど待ってから再度お試しください。")
+                err = str(e)
+                if "429" in err:
+                    await message.reply("⚠️ **1.5 Pro の無料枠制限（1分間2回まで）**に達しました。最高知能を維持するため、少し時間を空けてください。")
+                elif "404" in err:
+                    await message.reply("⚠️ モデル名が見つかりません。環境に合わせて調整が必要です。")
                 else:
-                    await message.reply(f"⚠️ エラーが発生しました。`/ai_clear` で解決する場合があります。\n内容: `{err_text[:500]}`")
+                    await message.reply(f"⚠️ エラー: `{err[:100]}`")
 
 async def setup(bot):
     await bot.add_cog(AIChat(bot))

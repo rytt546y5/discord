@@ -5,28 +5,24 @@ import google.generativeai as genai
 import json
 import os
 import io
-import re
 
 # =====================
-# 設定・パス
+# 設定
 # =====================
 CONFIG_FILE = "ai_config.json"
 KEY_FILE = "api_key.txt"
 
 def load_config():
-    """設定ファイルを読み込む"""
     if not os.path.exists(CONFIG_FILE): return {}
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
         try: return json.load(f)
         except: return {}
 
 def save_config(data):
-    """設定ファイルを保存する"""
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
 def get_api_key():
-    """api_key.txtからキーを安全に読み込む"""
     if os.path.exists(KEY_FILE):
         with open(KEY_FILE, "r", encoding="utf-8") as f:
             return f.read().strip()
@@ -34,97 +30,73 @@ def get_api_key():
 
 # API設定
 api_key = get_api_key()
-model = None
+pro_model = None
+flash_model = None
+
 if api_key:
     genai.configure(api_key=api_key)
-    try:
-        # あなたのリストで確認できた、404の出ないProモデル名称を使用
-        model = genai.GenerativeModel(
-            model_name='gemini-pro-latest', 
-            system_instruction=(
-                "あなたは、論理的思考と正確なコーディングにおいて世界最高峰の能力を持つ『Gemini Pro』です。"
-                "経営者であるユーザーをサポートするため、一を聞いて十を知るような高度な回答を提供してください。"
-                "1. PythonやDiscord.pyのコード生成は、最新の仕様に基づき、バグのない完璧なものを出力すること。"
-                "2. 経営に関するアドバイスは、具体的かつ論理的な根拠を伴うこと。"
-                "3. 回答は常に丁寧な日本語で行い、重要な部分は太字で強調してください。"
-            )
-        )
-    except Exception as e:
-        print(f"⚠️ AI初期化エラー: {e}")
+    # メインの知能 (Pro)
+    pro_model = genai.GenerativeModel(
+        model_name='gemini-pro-latest',
+        system_instruction="あなたは最高知能を持つ顧問です。論理的かつ専門的な回答をしてください。"
+    )
+    # バックアップの知能 (Flash) - 429エラー時に使用
+    flash_model = genai.GenerativeModel(
+        model_name='gemini-1.5-flash',
+        system_instruction="あなたは優秀な助手です。現在Proモデルが制限中のため、代役として簡潔に回答します。"
+    )
 
-# =====================
-# COG
-# =====================
 class AIChat(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.chat_sessions = {}
+        self.sessions = {}
 
-    @app_commands.command(name="ai_set_channel", description="高知能Proモデルを専用チャンネルに連携します")
-    @app_commands.describe(channel="AIとお喋りするチャンネル")
-    @app_commands.default_permissions(administrator=True) # 管理者のみ
+    @app_commands.command(name="ai_set_channel", description="高知能AIをチャンネルに連携します")
+    @app_commands.default_permissions(administrator=True)
     async def ai_set_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        if not model:
-            return await interaction.response.send_message("❌ AIの初期化に失敗しています。api_key.txtを確認してください。", ephemeral=True)
-        
         config = load_config()
         config[str(interaction.guild.id)] = {"channel_id": channel.id}
         save_config(config)
-        await interaction.response.send_message(f"✅ {channel.mention} を「最高知能顧問」チャンネルに設定しました。", ephemeral=True)
+        await interaction.response.send_message(f"✅ {channel.mention} をAIチャンネルに設定しました。", ephemeral=True)
 
-    @app_commands.command(name="ai_clear", description="AIの会話履歴（記憶）をリセットします")
+    @app_commands.command(name="ai_clear", description="会話履歴をクリアします")
     @app_commands.default_permissions(administrator=True)
     async def ai_clear(self, interaction: discord.Interaction):
         gid = str(interaction.guild.id)
-        if gid in self.chat_sessions:
-            del self.chat_sessions[gid]
-        await interaction.response.send_message("🧹 履歴をクリアし、知能をリフレッシュしました。", ephemeral=True)
+        if gid in self.sessions: del self.sessions[gid]
+        await interaction.response.send_message("🧹 履歴をクリアしました。", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        # Bot自身や model がない場合は無視
-        if message.author.bot or not message.content or not model:
-            return
-
-        # チャンネルチェック
+        if message.author.bot or not message.content or not pro_model: return
         config = load_config()
-        target_id = config.get(str(message.guild.id), {}).get("channel_id")
-        if message.channel.id != target_id:
-            return
+        if message.channel.id != config.get(str(message.guild.id), {}).get("channel_id"): return
 
-        # AIが回答を生成している間、タイピング表示を出す
         async with message.channel.typing():
+            gid = str(message.guild.id)
+            if gid not in self.sessions:
+                self.sessions[gid] = {"pro": pro_model.start_chat(history=[]), "flash": flash_model.start_chat(history=[])}
+
             try:
-                gid = str(message.guild.id)
-                if gid not in self.chat_sessions:
-                    self.chat_sessions[gid] = model.start_chat(history=[])
-
-                # 無料枠の負荷を減らすため、直近の10往復分だけ履歴を保持
-                if len(self.chat_sessions[gid].history) > 20:
-                    self.chat_sessions[gid].history = self.chat_sessions[gid].history[-20:]
-
-                # AIにメッセージを送信
-                response = self.chat_sessions[gid].send_message(message.content)
+                # まずは最高知能(Pro)で試行
+                response = self.sessions[gid]["pro"].send_message(message.content)
                 answer = response.text
-
-                # Discordの2000文字制限への対応
-                if len(answer) <= 2000:
-                    await message.reply(answer)
-                else:
-                    # 長文はファイルとして送信
-                    with io.BytesIO(answer.encode("utf-8")) as f:
-                        await message.reply(
-                            "📄 回答が高度な長文となったため、ファイルで出力しました。", 
-                            file=discord.File(f, filename="pro_answer.txt")
-                        )
-            
             except Exception as e:
-                err_text = str(e)
-                if "429" in err_text:
-                    await message.reply("⚠️ **1.5 Pro の無料枠制限**に達しました。最高知能を維持するため、1分ほど時間を空けてください。")
+                if "429" in str(e):
+                    # Proが制限中なら、爆速のFlashで即座にカバー
+                    try:
+                        response = self.sessions[gid]["flash"].send_message(f"【至急】Proが制限中のため代打で答えてください: {message.content}")
+                        answer = f"⚠️(Pro制限中/Flash代行)\n{response.text}"
+                    except:
+                        answer = "⚠️ AIの無料枠が完全に上限に達しました。1分ほどお待ちください。"
                 else:
-                    # エラーメッセージを短く丸めて送信
-                    await message.reply(f"⚠️ AIエラーが発生しました。時間を置くか、`/ai_clear` を試してください。\n内容: `{err_text[:200]}`")
+                    answer = f"⚠️ エラーが発生しました: {str(e)[:100]}"
+
+            if len(answer) <= 2000:
+                await message.reply(answer)
+            else:
+                with io.BytesIO(answer.encode("utf-8")) as f:
+                    await message.reply("📄 回答が長いためファイルで送信します。", file=discord.File(f, filename="ai_answer.txt"))
 
 async def setup(bot):
     await bot.add_cog(AIChat(bot))

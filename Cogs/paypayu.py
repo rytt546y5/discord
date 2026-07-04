@@ -4,8 +4,9 @@ from useragent_changer import UserAgent
 
 ua =UserAgent('iphone')
 
-PROXY_URL =None
+PROXY_URL = ""
 
+# --- send login request ---
 async def login(phoneNumber: str, password: str, uuid: str):
     headers = {
         'User-Agent': ua.set(),
@@ -27,6 +28,7 @@ async def login(phoneNumber: str, password: str, uuid: str):
         async with session.post("https://www.paypay.ne.jp/app/v1/oauth/token", headers=headers, json=payload, proxy=PROXY_URL) as login_request_response:
             return await login_request_response.json()
 
+# --- one-time-password authentication ---
 async def login_otp(set_uuid,otp,otpid,otp_pre):
     otp_number=otp
     headers = {
@@ -72,15 +74,17 @@ async def check_link(cd):
                 link_info = await response.json()
             
         except aiohttp.ClientError as e:
-            print(f"API_REQ_EXC: {e}")
+            print(f"API_REQ_EXC: {e}") #debug :)
             return False
     
     result_code = link_info.get("header", {}).get("resultCode")
     if result_code != "S0000":
+        # ãªã¶ã«ãã³ã¼ããS0000ä»¥å¤ã ã£ãå ´åã¯åºæ¬ä½ãã¨ã©ã¼èµ·ãã¦ã
         return False
 
     order_status = link_info.get("payload", {}).get("orderStatus")
     if order_status == "PENDING":
+        # ååå¾ã¡ã ã£ããlink_infoãè¿ãããããªãã£ããåãåããã¦ãorã­ã£ã³ã»ã«ããã¦ãor...ããFalse
         return link_info
     else:
         return False
@@ -102,13 +106,14 @@ async def link_rev(cd: str, phoneNumber: str, password: str, uuid: str,link_pass
                 link_info = await response.json()
 
             if link_info.get("payload", {}).get("orderStatus") != "PENDING":
+                # ããã§ãååå¾ã¡ããã§ãã¯ãååå¾ã¡ãããªãã£ããå¼¾ã
                 return False
             
             if link_info.get("payload", {}).get("pendingP2PInfo", {}).get("isSetPasscode") and link_password is None:
                 return False
 
         except aiohttp.ClientError as e:
-            print(f"LINK_REQ_EXC: {e}")
+            print(f"LINK_REQ_EXC: {e}") #debug :)
             return False
         
         login_payload = {
@@ -166,6 +171,5 @@ async def link_rev(cd: str, phoneNumber: str, password: str, uuid: str,link_pass
                     return False
 
         except aiohttp.ClientError as e:
-            print(f"REVERR: {e}") 
+            print(f"REVERR: {e}") #debug :) 
             return False
-    

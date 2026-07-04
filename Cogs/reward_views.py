@@ -1,6 +1,7 @@
 import discord
 import json
 import os
+import io
 
 REWARD_ITEMS_FILE = "reward_items.json"
 REWARD_CONFIG_FILE = "reward_config.json"
@@ -15,6 +16,9 @@ def save_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
+# =====================
+# ConfirmView (受取確認)
+# =====================
 class ConfirmView(discord.ui.View):
     def __init__(self, item_name: str, guild_id: int):
         super().__init__(timeout=60)
@@ -32,15 +36,15 @@ class ConfirmView(discord.ui.View):
         if not item_data or not item_data.get("stock"):
             return await interaction.response.send_message("❌ 在庫がありません。", ephemeral=True)
 
-        # 在庫取得ロジック
+        # 在庫取得 (有限なら削除、無限なら参照)
         if item_data["mode"] == "finite":
-            item_content = item_data["stock"].pop(0) # 有限：pop(0)
+            item_content = item_data["stock"].pop(0)
         else:
-            item_content = item_data["stock"][0] # 無限：[0]
+            item_content = item_data["stock"][0]
 
         save_json(REWARD_ITEMS_FILE, items)
 
-        # ユーザーへのDM送信 (Embed)
+        # DM送信 (指定のEmbed形式)
         embed = discord.Embed(
             title="📦 商品受け取り",
             description=item_content,
@@ -50,25 +54,25 @@ class ConfirmView(discord.ui.View):
         
         try:
             await interaction.user.send(embed=embed)
-            await interaction.response.edit_message(content="✅ DMで商品を送信しました。", view=None)
+            await interaction.response.edit_message(content="✅ DMで商品を送信しました。ご確認ください。", view=None)
         except discord.Forbidden:
             return await interaction.response.send_message("❌ DMを送信できませんでした。設定を確認してください。", ephemeral=True)
 
-        # ログ送信
+        # ログ送信 (指定のEmbed形式)
         log_channel_id = config.get(self.guild_id, {}).get("log_channel")
         if log_channel_id:
             channel = interaction.guild.get_channel(int(log_channel_id))
             if channel:
-                log_embed = discord.Embed(
-                    title="📥配布物を受け取りました📥",
-                    color=discord.Color.blue()
-                )
+                log_embed = discord.Embed(title="📥 商品受け取りログ", color=discord.Color.blue())
                 log_embed.set_thumbnail(url=interaction.user.display_avatar.url)
-                log_embed.add_field(name="👤￤ユーザー", value=interaction.user.mention)
-                log_embed.add_field(name="🎁￤商品名", value=self.item_name)
-                log_embed.set_footer(text="またのご利用お待ちしております。")
+                log_embed.add_field(name="ユーザー", value=interaction.user.mention)
+                log_embed.add_field(name="商品名", value=self.item_name)
+                log_embed.set_footer(text="Reward System")
                 await channel.send(embed=log_embed)
 
+# =====================
+# ItemSelect (商品選択)
+# =====================
 class ItemSelect(discord.ui.Select):
     def __init__(self, guild_id: int):
         items = load_json(REWARD_ITEMS_FILE)
@@ -84,7 +88,7 @@ class ItemSelect(discord.ui.Select):
         if not options:
             options.append(discord.SelectOption(label="商品がありません", value="none", disabled=True))
 
-        super().__init__(placeholder="商品を選択してください", options=options)
+        super().__init__(placeholder="受け取りたい商品を選択してください", options=options)
 
     async def callback(self, interaction: discord.Interaction):
         if self.values[0] == "none": return
@@ -96,10 +100,18 @@ class ItemView(discord.ui.View):
         super().__init__(timeout=60)
         self.add_item(ItemSelect(guild_id))
 
+# =====================
+# RewardPanelView (受取パネル)
+# =====================
 class RewardPanelView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None) # 永続化
 
-    @discord.ui.button(label="📦 商品を受け取る", style=discord.ButtonStyle.gray, custom_id="reward_panel_button")
+    # ここを Style.primary (青色) に変更しました
+    @discord.ui.button(
+        label="📦 商品を受け取る", 
+        style=discord.ButtonStyle.primary, 
+        custom_id="reward_panel_button"
+    )
     async def receive(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message("商品リストを表示します。", view=ItemView(interaction.guild.id), ephemeral=True)

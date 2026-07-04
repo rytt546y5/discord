@@ -440,11 +440,12 @@ class VendingMachineCog(commands.Cog):
                 embed.description = "```現在、販売中の商品はありません。```"
 
         view = VendingMachineCog.VendingMachineView(vending_machine_id, self.bot)
-        msg = await interaction.response.send_message(embed=embed, view=view)
+        msg = await interaction.channel.send(embed=embed, view=view)
 
         vending_data[vending_machine_id]["panel_message_id"] = msg.id
         vending_data[vending_machine_id]["panel_channel_id"] = interaction.channel.id
         save_json(VENDING_DATA_FILE, vending_data)
+        await interaction.response.send_message("設置完了", ephemeral=True)
 
     @app_commands.command(name="在庫引出", description="商品の在庫を引き出します")
     @is_allowed()
@@ -1024,12 +1025,8 @@ class VendingMachineCog(commands.Cog):
                         private_log_embed.add_field(name="自販機", value=f"```{vm['name']}({self.vending_machine_id})```", inline=True)
                         private_log_embed.set_footer(text=interaction.client.embed_footer)
                         
-                        discord_file = discord.File(
-                            io.BytesIO(purchased_content_text.encode('utf-8')),
-                            filename=f"purchase_{interaction.user.id}_{int(discord.utils.utcnow().timestamp())}.txt"
-                        )
-                        
-                        await private_log_channel.send(embed=private_log_embed, file=discord_file)
+                        # txtファイル送信部分を削除しました
+                        await private_log_channel.send(embed=private_log_embed)
                 
             except Exception as e:
                 await handle_error(interaction, e)
@@ -1297,10 +1294,7 @@ class VendingMachineCog(commands.Cog):
                                 f.write("\n".join(new_stock_lines))
                             
                             await interaction.followup.send(f"商品「{product['name']}」に`{len(new_stock_lines)}`個の在庫を追加しました。", ephemeral=True)
-                            await VendingMachineCog.refresh_panel(interaction.client, vending_machine_id)
-                            # 在庫追加通知を送信
-                            await self.send_stock_notification(interaction, product, len(new_stock_lines))
-                            await VendingMachineCog.refresh_panel(self.view.bot, vending_machine_id)
+                            
                         except Exception as e:
                             await handle_error(interaction, e)
                     else:

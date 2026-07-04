@@ -1142,7 +1142,7 @@ class VendingMachineCog(commands.Cog):
                                     description=f"現在 {product['name']}の在庫が不足しています。",
                                     color=0x67ACC
                                 )
-                                embed.set_footer(text="自販機製作者 えふる")
+                                embed.set_footer(text="自販機製作者 very(ぺにー)")
                                 return await interaction.response.send_message(embed=embed, ephemeral=True)
                     except:
                         embed = discord.Embed(

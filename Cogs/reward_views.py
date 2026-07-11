@@ -88,7 +88,7 @@ class ItemSelect(discord.ui.Select):
         if not options:
             options.append(discord.SelectOption(label="商品がありません", value="none", disabled=True))
 
-        super().__init__(placeholder="受け取りたい商品を選択してください", options=options)
+        super().__init__(placeholder="商品を選択してください", options=options)
 
     async def callback(self, interaction: discord.Interaction):
         if self.values[0] == "none": return

@@ -22,34 +22,52 @@ def save_config(data):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
-# API設定：最も枠が安定している gemini-1.5-flash に強制固定
-api_key = None
-if os.path.exists(KEY_FILE):
-    with open(KEY_FILE, "r", encoding="utf-8") as f:
-        api_key = f.read().strip()
+def get_api_key():
+    if os.path.exists(KEY_FILE):
+        with open(KEY_FILE, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    return None
 
+# API設定
+api_key = get_api_key()
 model = None
+
 if api_key:
     genai.configure(api_key=api_key)
-    # 2.0やLiteで「Limit 0」が出る場合でも、1.5-flashなら動く確率が非常に高いです
-    model = genai.GenerativeModel(
-        model_name='gemini-1.5-flash', 
-        system_instruction="あなたは優秀な経営・開発助手です。日本語で簡潔かつ正確に回答してください。"
-    )
+    try:
+        # あなたの環境で確実に動作する「最新Flashエイリアス」を指定
+        model = genai.GenerativeModel(
+            model_name='gemini-flash-latest', 
+            system_instruction=(
+                "あなたは『最高知能』を持つ経営顧問兼シニアエンジニアです。"
+                "回答は常に論理的で、経営者であるユーザーの利益を最大化してください。"
+                "プログラミングの質問には、最新のDiscord.py仕様に基づいた完璧なコードを提供してください。"
+                "結論から述べ、重要な部分は太字で強調してください。"
+            )
+        )
+    except Exception as e:
+        print(f"⚠️ AI初期化エラー: {e}")
 
 class AIChat(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.sessions = {}
 
-    @app_commands.command(name="ai_set_channel", description="AIチャットを設定（管理者のみ）")
+    @app_commands.command(name="ai_set_channel", description="AIをチャンネルに連携します")
     @app_commands.default_permissions(administrator=True)
     async def ai_set_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        if not model: return await interaction.response.send_message("❌ API初期化失敗", ephemeral=True)
+        if not model: return await interaction.response.send_message("❌ APIキーを確認してください。", ephemeral=True)
         config = load_config()
         config[str(interaction.guild.id)] = {"channel_id": channel.id}
         save_config(config)
-        await interaction.response.send_message(f"✅ {channel.mention} をAIチャンネルに設定しました。", ephemeral=True)
+        await interaction.response.send_message(f"✅ {channel.mention} でAIを起動しました。", ephemeral=True)
+
+    @app_commands.command(name="ai_clear", description="AIの記憶をリセットします")
+    @app_commands.default_permissions(administrator=True)
+    async def ai_clear(self, interaction: discord.Interaction):
+        gid = str(interaction.guild.id)
+        if gid in self.sessions: del self.sessions[gid]
+        await interaction.response.send_message("🧹 履歴をクリアしました。", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -62,22 +80,28 @@ class AIChat(commands.Cog):
                 gid = str(message.guild.id)
                 if gid not in self.sessions:
                     self.sessions[gid] = model.start_chat(history=[])
-                
-                # 履歴が長くなると無料枠制限に触れるため、短く維持
+
+                # 履歴制限（無料枠の節約）
                 if len(self.sessions[gid].history) > 10:
                     self.sessions[gid].history = self.sessions[gid].history[-10:]
 
                 response = self.sessions[gid].send_message(message.content)
-                await message.reply(response.text[:2000])
+                answer = response.text
+
+                if len(answer) <= 2000:
+                    await message.reply(answer)
+                else:
+                    with io.BytesIO(answer.encode("utf-8")) as f:
+                        await message.reply("📄 回答が長文のため、ファイルで出力しました。", file=discord.File(f, filename="answer.txt"))
 
             except Exception as e:
                 err = str(e)
                 if "429" in err:
-                    await message.reply("⚠️ 現在、Google側の無料枠（1分間の回数制限）に達しています。1分ほど待ってから話しかけてください。")
-                elif "500" in err:
-                    await message.reply("⚠️ Googleサーバー側でエラーが起きています。少し時間をおいてください。")
+                    await message.reply("⚠️ 現在、無料枠の回数制限がかかっています。1分ほど待ってから再度お試しください。")
+                elif "404" in err:
+                    await message.reply("⚠️ モデル名エラー。管理者は設定を確認してください。")
                 else:
-                    await message.reply(f"⚠️ 申し訳ありません、一時的に回答できません。\n内容: `{err[:100]}`")
+                    await message.reply(f"⚠️ エラーが発生しました。\n`{err[:200]}`")
 
 async def setup(bot):
     await bot.add_cog(AIChat(bot))
